@@ -1,0 +1,118 @@
+import { useState } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useWorkspace } from "@/hooks/use-workspace";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Plus, MoreVertical, Copy, RefreshCw, Pause, Archive } from "lucide-react";
+import { type Client, type Post } from "@/lib/content";
+import { toast } from "sonner";
+
+export const Route = createFileRoute("/_authenticated/clients")({
+  component: Clients,
+  head: () => ({ meta: [{ title: "Clientes — Aprova" }] }),
+});
+
+function Clients() {
+  const qc = useQueryClient();
+  const { data: ws } = useWorkspace();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [ig, setIg] = useState("");
+
+  const { data } = useQuery({
+    queryKey: ["clients-page"],
+    queryFn: async () => {
+      const [clients, posts] = await Promise.all([
+        supabase.from("clients").select("*").order("created_at"),
+        supabase.from("posts").select("id,client_id,status"),
+      ]);
+      return { clients: (clients.data ?? []) as Client[], posts: (posts.data ?? []) as Pick<Post, "id" | "client_id" | "status">[] };
+    },
+  });
+
+  const refresh = () => qc.invalidateQueries({ queryKey: ["clients-page"] });
+
+  const create = async () => {
+    if (!ws || !name.trim()) return;
+    const { error } = await supabase.from("clients").insert({ workspace_id: ws.id, name, instagram_handle: ig || null });
+    if (error) return toast.error(error.message);
+    toast.success("Cliente criado");
+    setName(""); setIg(""); setOpen(false); refresh();
+  };
+
+  const copyLink = (c: Client) => {
+    navigator.clipboard.writeText(`${window.location.origin}/portal/${c.portal_token}`);
+    toast.success("Link do portal copiado");
+  };
+  const regen = async (c: Client) => {
+    const token = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
+    await supabase.from("clients").update({ portal_token: token }).eq("id", c.id);
+    toast.success("Token regenerado"); refresh();
+  };
+  const setStatus = async (c: Client, status: Client["status"]) => {
+    await supabase.from("clients").update({ status }).eq("id", c.id);
+    refresh();
+  };
+
+  return (
+    <div className="mx-auto max-w-6xl space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-tight">Clientes</h1>
+          <p className="text-muted-foreground">Gerencie os espaços dos seus clientes.</p>
+        </div>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild><Button><Plus className="h-4 w-4" /> Novo cliente</Button></DialogTrigger>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Novo cliente</DialogTitle></DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2"><Label>Nome</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
+              <div className="space-y-2"><Label>Instagram</Label><Input value={ig} onChange={(e) => setIg(e.target.value)} placeholder="@cliente" /></div>
+              <Button onClick={create} className="w-full">Criar</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {data?.clients.map((c) => {
+          const pending = data.posts.filter((p) => p.client_id === c.id && (p.status === "in_approval" || p.status === "adjustment_requested")).length;
+          return (
+            <Card key={c.id} className={c.status !== "active" ? "opacity-60" : ""}>
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between">
+                  <Link to="/clients/$id" params={{ id: c.id }} className="flex items-center gap-3">
+                    <span className="flex h-11 w-11 items-center justify-center rounded-full text-sm font-bold text-primary-foreground" style={{ backgroundColor: c.brand_color ?? "#7c3aed" }}>{c.name.charAt(0)}</span>
+                    <div>
+                      <p className="font-semibold">{c.name}</p>
+                      <p className="text-xs text-muted-foreground">{c.instagram_handle ?? "—"}</p>
+                    </div>
+                  </Link>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreVertical className="h-4 w-4" /></Button></DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => copyLink(c)}><Copy className="h-4 w-4" /> Copiar link do portal</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => regen(c)}><RefreshCw className="h-4 w-4" /> Regenerar token</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setStatus(c, c.status === "paused" ? "active" : "paused")}><Pause className="h-4 w-4" /> {c.status === "paused" ? "Reativar" : "Pausar"}</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setStatus(c, "archived")}><Archive className="h-4 w-4" /> Arquivar</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+                <div className="mt-4 flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Pendentes</span>
+                  <span className="rounded-full bg-warning/20 px-2 py-0.5 text-xs text-warning-foreground">{pending}</span>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
