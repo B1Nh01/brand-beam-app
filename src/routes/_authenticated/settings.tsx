@@ -136,7 +136,12 @@ function Settings() {
                       {m.role === "owner" ? "Dono" : "Membro"}
                     </span>
                     {isOwner && m.role !== "owner" && (
-                      <Button variant="ghost" size="icon" onClick={() => removeMember(m.user_id)}>
+                      <Button variant="ghost" size="icon" onClick={() => setConfirm({
+                        title: "Remover membro?",
+                        description: `${m.name} perderá o acesso a este workspace. Esta ação não pode ser desfeita, mas você pode convidá-lo novamente depois.`,
+                        confirmLabel: "Remover",
+                        onConfirm: async () => { await removeMember(m.user_id); },
+                      })}>
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     )}
