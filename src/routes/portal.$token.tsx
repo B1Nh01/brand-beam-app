@@ -161,14 +161,18 @@ function PortalPostDialog({ token, post, onClose, onChanged }: { token: string; 
     if (!ensureName()) return;
     const { error } = await supabase.rpc("portal_approve", { _token: token, _post_id: post.id, _author_name: name });
     if (error) return toast.error("Não foi possível aprovar");
-    toast.success("Aprovado!"); onChanged(); onClose();
+    toast.success("Post aprovado!");
+    onChanged();
+    setResult("approved");
   };
   const requestAdjust = async () => {
     if (!ensureName()) return;
     if (!body.trim()) return toast.error("Descreva o ajuste");
     const { error } = await supabase.rpc("portal_request_adjustment", { _token: token, _post_id: post.id, _author_name: name, _body: body });
     if (error) return toast.error("Não foi possível enviar");
-    toast.success("Ajuste solicitado"); onChanged(); onClose();
+    toast.success("Ajuste solicitado");
+    onChanged();
+    setResult("adjusted");
   };
   const sendComment = async () => {
     if (!ensureName() || !body.trim()) return;
