@@ -103,6 +103,10 @@ function CalendarView({ posts, clientId, onOpen, onNew }: { posts: Post[]; clien
   const [view, setView] = useState<"month" | "week">("month");
   const [currentDate, setCurrentDate] = useState(() => new Date());
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  );
+
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
   const first = new Date(year, month, 1);
