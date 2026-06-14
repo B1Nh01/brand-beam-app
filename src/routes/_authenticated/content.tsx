@@ -3,9 +3,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/empty-state";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusBadge } from "@/components/status-badge";
 import { PostDialog } from "@/components/post-dialog";
+import { LayoutGrid } from "lucide-react";
 import { STATUS_LABELS, STATUS_ORDER, type Post, type Client } from "@/lib/content";
 
 export const Route = createFileRoute("/_authenticated/content")({
