@@ -335,7 +335,7 @@ function FeedPreview({ posts, clientId, onOpen }: { posts: Post[]; clientId: str
   });
 
   const persistOrder = async (ordered: Post[]) => {
-    const updates = ordered.map((p, i) => ({ id: p.id, position: i }));
+    const updates = ordered.map((p, i) => ({ ...p, position: i }));
     const { error } = await supabase
       .from("posts")
       .upsert(updates, { onConflict: "id" });
