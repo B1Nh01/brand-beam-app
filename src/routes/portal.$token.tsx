@@ -238,6 +238,8 @@ function PortalPostDialog({ token, post, onClose, onChanged }: { token: string; 
             </div>
           )}
         </div>
+        </>
+        )}
       </DialogContent>
     </Dialog>
   );
