@@ -5,10 +5,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { StatusBadge } from "@/components/status-badge";
 import { FLOW_LABELS, type Post, type PostComment } from "@/lib/content";
-import { Check, Pencil, Send, Sparkles } from "lucide-react";
+import { Check, Pencil, Send, Sparkles, CheckCircle2, PencilLine, Inbox, PartyPopper } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/portal/$token")({
