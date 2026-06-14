@@ -204,6 +204,7 @@ function InviteDialog({
     setLoading(false);
     if (error || !data) return toast.error("Não foi possível criar o convite");
     setCreatedToken(data.token);
+    toast.success("Convite criado");
     onCreated();
   };
 
