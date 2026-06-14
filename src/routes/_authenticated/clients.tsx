@@ -27,8 +27,9 @@ function Clients() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [ig, setIg] = useState("");
+  const [confirm, setConfirm] = useState<ConfirmState | null>(null);
 
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["clients-page"],
     queryFn: async () => {
       const [clients, posts] = await Promise.all([
@@ -55,11 +56,14 @@ function Clients() {
   };
   const regen = async (c: Client) => {
     const token = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
-    await supabase.from("clients").update({ portal_token: token }).eq("id", c.id);
+    const { error } = await supabase.from("clients").update({ portal_token: token }).eq("id", c.id);
+    if (error) return toast.error("Não foi possível regenerar o token");
     toast.success("Token regenerado"); refresh();
   };
   const setStatus = async (c: Client, status: Client["status"]) => {
-    await supabase.from("clients").update({ status }).eq("id", c.id);
+    const { error } = await supabase.from("clients").update({ status }).eq("id", c.id);
+    if (error) return toast.error("Não foi possível atualizar o cliente");
+    toast.success(status === "archived" ? "Cliente arquivado" : status === "paused" ? "Cliente pausado" : "Cliente reativado");
     refresh();
   };
 
