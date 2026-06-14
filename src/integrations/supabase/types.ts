@@ -279,6 +279,50 @@ export type Database = {
           },
         ]
       }
+      workspace_invites: {
+        Row: {
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_workspace_role"]
+          status: Database["public"]["Enums"]["invite_status"]
+          token: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          expires_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_workspace_role"]
+          status?: Database["public"]["Enums"]["invite_status"]
+          token?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          expires_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_workspace_role"]
+          status?: Database["public"]["Enums"]["invite_status"]
+          token?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_invites_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspace_members: {
         Row: {
           created_at: string
@@ -366,6 +410,27 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      accept_invite: { Args: { _token: string }; Returns: string }
+      get_invite: {
+        Args: { _token: string }
+        Returns: {
+          email: string
+          expires_at: string
+          role: Database["public"]["Enums"]["app_workspace_role"]
+          status: Database["public"]["Enums"]["invite_status"]
+          workspace_name: string
+        }[]
+      }
+      is_workspace_owner: { Args: { _workspace_id: string }; Returns: boolean }
+      list_workspace_members: {
+        Args: { _workspace_id: string }
+        Returns: {
+          email: string
+          name: string
+          role: Database["public"]["Enums"]["app_workspace_role"]
+          user_id: string
+        }[]
       }
       portal_add_comment: {
         Args: {
@@ -528,6 +593,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      remove_workspace_member: {
+        Args: { _user_id: string; _workspace_id: string }
+        Returns: undefined
+      }
       user_in_workspace: { Args: { _workspace_id: string }; Returns: boolean }
     }
     Enums: {
@@ -536,6 +605,7 @@ export type Database = {
       client_status: "active" | "paused" | "archived"
       comment_author_type: "team" | "client"
       flow_stage: "idea" | "copy" | "media" | "final"
+      invite_status: "pending" | "accepted" | "expired"
       post_format: "static" | "carousel" | "reels" | "story"
       post_platform: "instagram" | "tiktok" | "both"
       post_status:
@@ -677,6 +747,7 @@ export const Constants = {
       client_status: ["active", "paused", "archived"],
       comment_author_type: ["team", "client"],
       flow_stage: ["idea", "copy", "media", "final"],
+      invite_status: ["pending", "accepted", "expired"],
       post_format: ["static", "carousel", "reels", "story"],
       post_platform: ["instagram", "tiktok", "both"],
       post_status: [
