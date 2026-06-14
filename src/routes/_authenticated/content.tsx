@@ -20,7 +20,7 @@ function ContentBoard() {
   const [openPost, setOpenPost] = useState<string | null>(null);
   const [client, setClient] = useState("all");
 
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["content-board"],
     queryFn: async () => {
       const [posts, clients] = await Promise.all([
