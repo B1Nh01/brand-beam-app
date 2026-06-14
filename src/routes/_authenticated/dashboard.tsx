@@ -1,9 +1,11 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Clock, AlertTriangle, CheckCircle2, Users, ArrowRight } from "lucide-react";
-import { STATUS_LABELS, type Post, type Client, type ActivityLog } from "@/lib/content";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/empty-state";
+import { Clock, AlertTriangle, CheckCircle2, Users, ArrowRight, Activity } from "lucide-react";
+import { type Post, type Client, type ActivityLog } from "@/lib/content";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -13,7 +15,8 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 });
 
 function Dashboard() {
-  const { data } = useQuery({
+  const navigate = useNavigate();
+  const { data, isLoading } = useQuery({
     queryKey: ["dashboard"],
     queryFn: async () => {
       const [posts, clients, activity] = await Promise.all([
@@ -28,6 +31,7 @@ function Dashboard() {
       };
     },
   });
+
 
   const posts = data?.posts ?? [];
   const weekAgo = Date.now() - 7 * 864e5;
