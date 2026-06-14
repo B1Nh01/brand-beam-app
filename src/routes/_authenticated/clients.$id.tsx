@@ -177,7 +177,7 @@ function CalendarView({ posts, clientId, onOpen, onNew }: { posts: Post[]; clien
     : `${weekCells[0].toLocaleDateString("pt-BR", { day: "numeric", month: "short" })} – ${weekCells[6].toLocaleDateString("pt-BR", { day: "numeric", month: "short", year: "numeric" })}`;
 
   return (
-    <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+    <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div className="rounded-xl border bg-card p-3">
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
