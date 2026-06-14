@@ -15,6 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ConfirmDialog, type ConfirmState } from "@/components/confirm-dialog";
 import { Copy, Trash2, UserPlus, Clock } from "lucide-react";
 import { toast } from "sonner";
 
