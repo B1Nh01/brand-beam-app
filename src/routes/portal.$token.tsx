@@ -133,6 +133,7 @@ function PortalPostDialog({ token, post, onClose, onChanged }: { token: string; 
   const [name, setName] = useState(() => (typeof localStorage !== "undefined" ? localStorage.getItem("portal_name") ?? "" : ""));
   const [body, setBody] = useState("");
   const [mode, setMode] = useState<null | "adjust">(null);
+  const [result, setResult] = useState<null | "approved" | "adjusted">(null);
 
   const { data: media } = useQuery({
     queryKey: ["portal-media", token, post.id],
