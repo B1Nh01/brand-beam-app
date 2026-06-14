@@ -59,45 +59,61 @@ function Portal() {
     <div className="min-h-screen bg-gradient-to-br from-accent via-background to-secondary">
       <header className="border-b bg-background/80 backdrop-blur">
         <div className="mx-auto flex max-w-3xl items-center gap-3 p-4">
-          <span className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-primary-foreground" style={{ backgroundColor: client.brand_color ?? "#7c3aed" }}>{client.name.charAt(0)}</span>
-          <div>
-            <p className="font-extrabold">{client.name}</p>
-            <p className="text-xs text-muted-foreground">{client.instagram_handle}</p>
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold text-primary-foreground" style={{ backgroundColor: client.brand_color ?? "#7c3aed" }}>{client.name.charAt(0)}</span>
+          <div className="min-w-0">
+            <p className="truncate font-extrabold">{client.name}</p>
+            <p className="truncate text-xs text-muted-foreground">{client.instagram_handle}</p>
           </div>
-          <span className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground"><Sparkles className="h-3 w-3" /> Aprova</span>
+          <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground"><Sparkles className="h-3 w-3" /> Aprova</span>
         </div>
       </header>
 
       <main className="mx-auto max-w-3xl space-y-6 p-4">
-        <section>
-          <h2 className="mb-2 font-semibold">Aguardando você ({pending.length})</h2>
-          <div className="space-y-2">
-            {pending.length === 0 && <p className="text-sm text-muted-foreground">Tudo aprovado por aqui! 🎉</p>}
-            {pending.map((p) => (
-              <Card key={p.id} className="cursor-pointer hover:bg-accent" onClick={() => setOpenPost(p)}>
-                <CardContent className="flex items-center justify-between p-4">
-                  <div>
-                    <p className="font-medium">{p.title}</p>
-                    <p className="text-xs text-muted-foreground">{p.scheduled_date}</p>
+        {posts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed p-10 text-center">
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+              <Inbox className="h-8 w-8 text-muted-foreground" />
+            </div>
+            <p className="font-semibold">Nenhum post para revisar ainda</p>
+            <p className="mt-1 max-w-xs text-sm text-muted-foreground">Assim que a equipe enviar conteúdos, eles aparecerão aqui para sua aprovação.</p>
+          </div>
+        ) : (
+          <>
+            <section>
+              <h2 className="mb-2 font-semibold">Aguardando você ({pending.length})</h2>
+              <div className="space-y-2">
+                {pending.length === 0 && (
+                  <div className="flex items-center gap-2 rounded-lg border bg-card p-4 text-sm text-muted-foreground">
+                    <PartyPopper className="h-4 w-4 text-primary" /> Tudo aprovado por aqui!
                   </div>
-                  <StatusBadge status={p.status} flowStage={p.flow_stage} approvalMode={p.approval_mode} />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </section>
+                )}
+                {pending.map((p) => (
+                  <Card key={p.id} className="cursor-pointer hover:bg-accent" onClick={() => setOpenPost(p)}>
+                    <CardContent className="flex items-center justify-between gap-2 p-4">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium">{p.title}</p>
+                        <p className="truncate text-xs text-muted-foreground">{p.scheduled_date}</p>
+                      </div>
+                      <StatusBadge status={p.status} flowStage={p.flow_stage} approvalMode={p.approval_mode} />
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </section>
 
-        <section>
-          <h2 className="mb-2 font-semibold">Todos os posts</h2>
-          <div className="grid gap-2">
-            {posts.map((p) => (
-              <button key={p.id} onClick={() => setOpenPost(p)} className="flex items-center justify-between rounded-lg border bg-card p-3 text-left hover:bg-accent">
-                <span className="text-sm font-medium">{p.title}</span>
-                <StatusBadge status={p.status} flowStage={p.flow_stage} approvalMode={p.approval_mode} />
-              </button>
-            ))}
-          </div>
-        </section>
+            <section>
+              <h2 className="mb-2 font-semibold">Todos os posts</h2>
+              <div className="grid gap-2">
+                {posts.map((p) => (
+                  <button key={p.id} onClick={() => setOpenPost(p)} className="flex items-center justify-between gap-2 rounded-lg border bg-card p-3 text-left hover:bg-accent">
+                    <span className="min-w-0 truncate text-sm font-medium">{p.title}</span>
+                    <StatusBadge status={p.status} flowStage={p.flow_stage} approvalMode={p.approval_mode} />
+                  </button>
+                ))}
+              </div>
+            </section>
+          </>
+        )}
       </main>
 
       {openPost && (
