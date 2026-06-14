@@ -46,11 +46,17 @@ function Dashboard() {
         <p className="text-muted-foreground">Visão geral da produção e aprovações.</p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Stat icon={Clock} label="Em aprovação" value={inApproval} tone="warning" />
-        <Stat icon={AlertTriangle} label="Ajustes pendentes" value={adjustments} tone="destructive" />
-        <Stat icon={CheckCircle2} label="Aprovados na semana" value={approvedWeek} tone="success" />
-      </div>
+      {isLoading ? (
+        <div className="grid gap-4 sm:grid-cols-3">
+          {[0, 1, 2].map((i) => <Skeleton key={i} className="h-24" />)}
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Stat icon={Clock} label="Em aprovação" value={inApproval} tone="warning" />
+          <Stat icon={AlertTriangle} label="Ajustes pendentes" value={adjustments} tone="destructive" />
+          <Stat icon={CheckCircle2} label="Aprovados na semana" value={approvedWeek} tone="success" />
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
         <Card>
