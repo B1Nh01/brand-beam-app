@@ -33,8 +33,23 @@ function Portal() {
     },
   });
 
-  if (isLoading) return <div className="flex min-h-screen items-center justify-center text-muted-foreground">Carregando…</div>;
-  if (!data?.client) return <div className="flex min-h-screen items-center justify-center text-muted-foreground">Link inválido ou desativado.</div>;
+  if (isLoading)
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-accent via-background to-secondary">
+        <div className="mx-auto max-w-3xl space-y-4 p-4">
+          <Skeleton className="h-14 w-full" />
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-20 w-full" />
+        </div>
+      </div>
+    );
+  if (!data?.client)
+    return (
+      <div className="flex min-h-screen items-center justify-center p-6 text-center text-muted-foreground">
+        Link inválido ou desativado.
+      </div>
+    );
 
   const client = data.client;
   const posts = data.posts;
