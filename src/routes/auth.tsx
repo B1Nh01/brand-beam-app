@@ -21,13 +21,23 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const afterAuth = async () => {
+    const pending = localStorage.getItem("pending_invite");
+    if (pending) {
+      const { error } = await supabase.rpc("accept_invite", { _token: pending });
+      localStorage.removeItem("pending_invite");
+      if (!error) toast.success("Você entrou no workspace!");
+    }
+    navigate({ to: "/dashboard" });
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) return toast.error(error.message);
-    navigate({ to: "/dashboard" });
+    await afterAuth();
   };
 
   const handleSignup = async (e: React.FormEvent) => {
@@ -38,18 +48,21 @@ function AuthPage() {
       password,
       options: { emailRedirectTo: window.location.origin },
     });
-    setLoading(false);
-    if (error) return toast.error(error.message);
-    toast.success("Conta criada! Você já pode entrar.");
+    if (error) {
+      setLoading(false);
+      return toast.error(error.message);
+    }
     const { error: e2 } = await supabase.auth.signInWithPassword({ email, password });
-    if (!e2) navigate({ to: "/dashboard" });
+    setLoading(false);
+    if (e2) return toast.success("Conta criada! Você já pode entrar.");
+    await afterAuth();
   };
 
   const google = async () => {
     const result = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
     if (result.error) return toast.error("Falha ao entrar com Google");
     if (result.redirected) return;
-    navigate({ to: "/dashboard" });
+    await afterAuth();
   };
 
   return (

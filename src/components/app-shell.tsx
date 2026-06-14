@@ -1,4 +1,5 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect } from "react";
+import { toast } from "sonner";
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import {
   LayoutDashboard,
@@ -112,6 +113,15 @@ function AppSidebar() {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
+  useEffect(() => {
+    const pending = localStorage.getItem("pending_invite");
+    if (!pending) return;
+    (async () => {
+      const { error } = await supabase.rpc("accept_invite", { _token: pending });
+      localStorage.removeItem("pending_invite");
+      if (!error) toast.success("Você entrou no workspace!");
+    })();
+  }, []);
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full bg-background">
