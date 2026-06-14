@@ -87,39 +87,65 @@ function Clients() {
         </Dialog>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {data?.clients.map((c) => {
-          const pending = data.posts.filter((p) => p.client_id === c.id && (p.status === "in_approval" || p.status === "adjustment_requested")).length;
-          return (
-            <Card key={c.id} className={c.status !== "active" ? "opacity-60" : ""}>
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between">
-                  <Link to="/clients/$id" params={{ id: c.id }} className="flex items-center gap-3">
-                    <span className="flex h-11 w-11 items-center justify-center rounded-full text-sm font-bold text-primary-foreground" style={{ backgroundColor: c.brand_color ?? "#7c3aed" }}>{c.name.charAt(0)}</span>
-                    <div>
-                      <p className="font-semibold">{c.name}</p>
-                      <p className="text-xs text-muted-foreground">{c.instagram_handle ?? "—"}</p>
-                    </div>
-                  </Link>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreVertical className="h-4 w-4" /></Button></DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => copyLink(c)}><Copy className="h-4 w-4" /> Copiar link do portal</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => regen(c)}><RefreshCw className="h-4 w-4" /> Regenerar token</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setStatus(c, c.status === "paused" ? "active" : "paused")}><Pause className="h-4 w-4" /> {c.status === "paused" ? "Reativar" : "Pausar"}</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setStatus(c, "archived")}><Archive className="h-4 w-4" /> Arquivar</DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-                <div className="mt-4 flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Pendentes</span>
-                  <span className="rounded-full bg-warning/20 px-2 py-0.5 text-xs text-warning-foreground">{pending}</span>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+      {isLoading ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[0, 1, 2].map((i) => <Skeleton key={i} className="h-32" />)}
+        </div>
+      ) : data?.clients.length === 0 ? (
+        <EmptyState
+          icon={UsersRound}
+          title="Nenhum cliente cadastrado"
+          description="Adicione seu primeiro cliente para criar o espaço de aprovação dele."
+          actionLabel="Adicionar cliente"
+          onAction={() => setOpen(true)}
+        />
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {data?.clients.map((c) => {
+            const pending = data.posts.filter((p) => p.client_id === c.id && (p.status === "in_approval" || p.status === "adjustment_requested")).length;
+            return (
+              <Card key={c.id} className={c.status !== "active" ? "opacity-60" : ""}>
+                <CardContent className="p-5">
+                  <div className="flex items-start justify-between">
+                    <Link to="/clients/$id" params={{ id: c.id }} className="flex min-w-0 items-center gap-3">
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold text-primary-foreground" style={{ backgroundColor: c.brand_color ?? "#7c3aed" }}>{c.name.charAt(0)}</span>
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold">{c.name}</p>
+                        <p className="truncate text-xs text-muted-foreground">{c.instagram_handle ?? "—"}</p>
+                      </div>
+                    </Link>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreVertical className="h-4 w-4" /></Button></DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => copyLink(c)}><Copy className="h-4 w-4" /> Copiar link do portal</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setConfirm({
+                          title: "Regenerar token do portal?",
+                          description: `O link atual do portal de ${c.name} deixará de funcionar imediatamente. Você precisará enviar o novo link ao cliente.`,
+                          confirmLabel: "Regenerar",
+                          onConfirm: () => regen(c),
+                        })}><RefreshCw className="h-4 w-4" /> Regenerar token</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setStatus(c, c.status === "paused" ? "active" : "paused")}><Pause className="h-4 w-4" /> {c.status === "paused" ? "Reativar" : "Pausar"}</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setConfirm({
+                          title: "Arquivar cliente?",
+                          description: `${c.name} será arquivado e deixará de aparecer entre os clientes ativos. Você pode reativá-lo depois.`,
+                          confirmLabel: "Arquivar",
+                          onConfirm: () => setStatus(c, "archived"),
+                        })}><Archive className="h-4 w-4" /> Arquivar</DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                  <div className="mt-4 flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Pendentes</span>
+                    <span className="rounded-full bg-warning/20 px-2 py-0.5 text-xs text-warning-foreground">{pending}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      <ConfirmDialog state={confirm} onOpenChange={(o) => !o && setConfirm(null)} />
     </div>
   );
 }
