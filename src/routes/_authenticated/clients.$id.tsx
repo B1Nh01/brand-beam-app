@@ -299,6 +299,18 @@ function DraggablePost({ post, onOpen }: { post: Post; onOpen: (id: string) => v
 }
 
 function FeedPreview({ posts, clientId, onOpen }: { posts: Post[]; clientId: string; onOpen: (id: string) => void }) {
+  const qc = useQueryClient();
+  const [items, setItems] = useState<Post[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setItems([...posts].sort((a, b) => a.position - b.position));
+  }, [posts]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  );
+
   const { data: covers } = useQuery({
     queryKey: ["feed-covers", clientId],
     queryFn: async () => {
@@ -315,16 +327,106 @@ function FeedPreview({ posts, clientId, onOpen }: { posts: Post[]; clientId: str
     enabled: posts.length > 0,
   });
 
-  const ordered = [...posts].sort((a, b) => a.position - b.position);
+  const persistOrder = async (ordered: Post[]) => {
+    const updates = ordered.map((p, i) => ({ id: p.id, position: i }));
+    const { error } = await supabase
+      .from("posts")
+      .upsert(updates, { onConflict: "id" });
+    if (error) {
+      toast.error("Erro ao atualizar ordem");
+      return false;
+    }
+    qc.invalidateQueries({ queryKey: ["posts", clientId] });
+    return true;
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    setActiveId(null);
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = items.findIndex((p) => p.id === active.id);
+    const newIndex = items.findIndex((p) => p.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const reordered = arrayMove(items, oldIndex, newIndex);
+    setItems(reordered);
+    if (await persistOrder(reordered)) toast.success("Ordem do feed atualizada");
+  };
+
+  const resetByDate = async () => {
+    const sorted = [...items].sort((a, b) => {
+      const da = a.scheduled_date ?? "";
+      const db = b.scheduled_date ?? "";
+      if (!da && !db) return 0;
+      if (!da) return 1;
+      if (!db) return -1;
+      return da.localeCompare(db);
+    });
+    setItems(sorted);
+    if (await persistOrder(sorted)) toast.success("Ordem do feed atualizada");
+  };
+
+  const activePost = items.find((p) => p.id === activeId);
+
   return (
-    <div className="mx-auto max-w-md rounded-xl border bg-card p-2">
-      <div className="grid grid-cols-3 gap-1">
-        {ordered.map((p) => (
-          <button key={p.id} onClick={() => onOpen(p.id)} className="relative aspect-square overflow-hidden rounded bg-muted" style={{ backgroundColor: covers?.[p.id] ? undefined : "var(--muted)" }}>
-            {covers?.[p.id] ? <img src={covers[p.id]} alt={p.title} className="h-full w-full object-cover" /> : <span className="flex h-full items-center justify-center p-1 text-center text-[10px] text-muted-foreground">{p.title}</span>}
-          </button>
-        ))}
+    <div className="mx-auto max-w-md space-y-3">
+      <div className="flex justify-end">
+        <Button size="sm" variant="outline" onClick={resetByDate}>Redefinir ordem por data</Button>
+      </div>
+      <div className="rounded-xl border bg-card p-2">
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={(e) => setActiveId(e.active.id as string)}
+          onDragEnd={handleDragEnd}
+          onDragCancel={() => setActiveId(null)}
+        >
+          <SortableContext items={items.map((p) => p.id)} strategy={rectSortingStrategy}>
+            <div className="grid grid-cols-3 gap-1">
+              {items.map((p) => (
+                <SortableTile key={p.id} post={p} cover={covers?.[p.id]} onOpen={onOpen} />
+              ))}
+            </div>
+          </SortableContext>
+          <DragOverlay>
+            {activePost ? (
+              <FeedTileContent post={activePost} cover={covers?.[activePost.id]} dragging />
+            ) : null}
+          </DragOverlay>
+        </DndContext>
       </div>
     </div>
+  );
+}
+
+function FeedTileContent({ post, cover, dragging }: { post: Post; cover?: string; dragging?: boolean }) {
+  return (
+    <div className={cn("relative aspect-square w-full overflow-hidden rounded bg-muted", dragging && "ring-2 ring-primary shadow-lg")}>
+      {cover ? (
+        <img src={cover} alt={post.title} className="h-full w-full object-cover" />
+      ) : (
+        <span className="flex h-full items-center justify-center p-1 text-center text-[10px] text-muted-foreground">{post.title}</span>
+      )}
+    </div>
+  );
+}
+
+function SortableTile({ post, cover, onOpen }: { post: Post; cover?: string; onOpen: (id: string) => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: post.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0 : post.status === "draft" ? 0.5 : 1,
+  };
+  return (
+    <button
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      onClick={() => onOpen(post.id)}
+      className="touch-none"
+    >
+      <FeedTileContent post={post} cover={cover} />
+    </button>
   );
 }
