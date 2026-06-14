@@ -64,7 +64,10 @@ function Dashboard() {
             <CardTitle>Atividade recente</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {data?.activity.length === 0 && <p className="text-sm text-muted-foreground">Sem atividade ainda.</p>}
+            {isLoading && [0, 1, 2].map((i) => <Skeleton key={i} className="h-8" />)}
+            {!isLoading && data?.activity.length === 0 && (
+              <EmptyState icon={Activity} title="Nenhuma atividade ainda" description="As ações da equipe e dos clientes aparecerão aqui." className="border-0 p-6" />
+            )}
             {data?.activity.map((a) => (
               <div key={a.id} className="flex items-center justify-between border-b pb-2 last:border-0 text-sm">
                 <span>
@@ -84,6 +87,10 @@ function Dashboard() {
             <Link to="/clients" className="text-sm text-primary inline-flex items-center gap-1">Ver todos <ArrowRight className="h-3 w-3" /></Link>
           </CardHeader>
           <CardContent className="space-y-2">
+            {isLoading && [0, 1].map((i) => <Skeleton key={i} className="h-14" />)}
+            {!isLoading && data?.clients.length === 0 && (
+              <EmptyState icon={Users} title="Nenhum cliente cadastrado" description="Adicione um cliente para começar." actionLabel="Adicionar cliente" onAction={() => navigate({ to: "/clients" })} className="border-0 p-6" />
+            )}
             {data?.clients.map((c) => {
               const pending = posts.filter((p) => p.client_id === c.id && (p.status === "in_approval" || p.status === "adjustment_requested")).length;
               return (
