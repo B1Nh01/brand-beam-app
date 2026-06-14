@@ -122,14 +122,14 @@ function Clients() {
                           title: "Regenerar token do portal?",
                           description: `O link atual do portal de ${c.name} deixará de funcionar imediatamente. Você precisará enviar o novo link ao cliente.`,
                           confirmLabel: "Regenerar",
-                          onConfirm: () => regen(c),
+                          onConfirm: async () => { await regen(c); },
                         })}><RefreshCw className="h-4 w-4" /> Regenerar token</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => setStatus(c, c.status === "paused" ? "active" : "paused")}><Pause className="h-4 w-4" /> {c.status === "paused" ? "Reativar" : "Pausar"}</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => setConfirm({
                           title: "Arquivar cliente?",
                           description: `${c.name} será arquivado e deixará de aparecer entre os clientes ativos. Você pode reativá-lo depois.`,
                           confirmLabel: "Arquivar",
-                          onConfirm: () => setStatus(c, "archived"),
+                          onConfirm: async () => { await setStatus(c, "archived"); },
                         })}><Archive className="h-4 w-4" /> Arquivar</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
