@@ -12,8 +12,11 @@ import { FORMAT_LABELS, type Post, type Client } from "@/lib/content";
 import {
   DndContext,
   DragOverlay,
+  PointerSensor,
   useDraggable,
   useDroppable,
+  useSensor,
+  useSensors,
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
