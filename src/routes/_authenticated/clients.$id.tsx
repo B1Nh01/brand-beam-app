@@ -1,14 +1,28 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusBadge } from "@/components/status-badge";
 import { PostDialog } from "@/components/post-dialog";
-import { Plus } from "lucide-react";
-import { STATUS_LABELS, STATUS_ORDER, FORMAT_LABELS, type Post, type Client } from "@/lib/content";
+import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { FORMAT_LABELS, type Post, type Client } from "@/lib/content";
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/clients/$id")({
   component: ClientSpace,
@@ -54,7 +68,7 @@ function ClientSpace() {
         </TabsList>
 
         <TabsContent value="calendar" className="pt-4">
-          <CalendarView posts={posts} onOpen={setOpenPost} onNew={(d) => client && setNewPost({ clientId: client.id, workspaceId: client.workspace_id, date: d })} />
+          <CalendarView posts={posts} clientId={id} onOpen={setOpenPost} onNew={(d) => client && setNewPost({ clientId: client.id, workspaceId: client.workspace_id, date: d })} />
         </TabsContent>
 
         <TabsContent value="feed" className="pt-4">
@@ -83,44 +97,204 @@ function ClientSpace() {
   );
 }
 
-function CalendarView({ posts, onOpen, onNew }: { posts: Post[]; onOpen: (id: string) => void; onNew: (date: string) => void }) {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
+function CalendarView({ posts, clientId, onOpen, onNew }: { posts: Post[]; clientId: string; onOpen: (id: string) => void; onNew: (date: string) => void }) {
+  const qc = useQueryClient();
+  const [activePost, setActivePost] = useState<Post | null>(null);
+  const [view, setView] = useState<"month" | "week">("month");
+  const [currentDate, setCurrentDate] = useState(() => new Date());
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  );
+
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
   const first = new Date(year, month, 1);
   const startDay = first.getDay();
-  const days = new Date(year, month + 1, 0).getDate();
-  const cells: (number | null)[] = [...Array(startDay).fill(null), ...Array.from({ length: days }, (_, i) => i + 1)];
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
   const iso = (d: number) => `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 
+  const monthCells: (number | null)[] = [
+    ...Array(startDay).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+
+  const weekStart = new Date(currentDate);
+  weekStart.setDate(currentDate.getDate() - currentDate.getDay());
+  const weekCells = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekStart);
+    d.setDate(weekStart.getDate() + i);
+    return d;
+  });
+
+  const handleDragStart = (event: DragStartEvent) => {
+    const post = posts.find((p) => p.id === event.active.id);
+    if (post) setActivePost(post);
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    setActivePost(null);
+    const { active, over } = event;
+    if (!over) return;
+    const postId = active.id as string;
+    const newDate = over.id as string;
+    const post = posts.find((p) => p.id === postId);
+    if (!post || post.scheduled_date === newDate) return;
+    if (["approved", "scheduled"].includes(post.status)) {
+      const ok = window.confirm("Este post já foi aprovado. Deseja reagendar mesmo assim?");
+      if (!ok) return;
+    }
+    if (post.status === "published") return;
+
+    const { error } = await supabase
+      .from("posts")
+      .update({ scheduled_date: newDate })
+      .eq("id", postId);
+    if (error) {
+      toast.error("Erro ao reagendar");
+      return;
+    }
+    qc.invalidateQueries({ queryKey: ["posts", clientId] });
+    toast.success(`Post reagendado para ${newDate.split("-").reverse().join("/")}`);
+  };
+
+  const goPrev = () => {
+    const d = new Date(currentDate);
+    if (view === "month") d.setMonth(d.getMonth() - 1);
+    else d.setDate(d.getDate() - 7);
+    setCurrentDate(d);
+  };
+
+  const goNext = () => {
+    const d = new Date(currentDate);
+    if (view === "month") d.setMonth(d.getMonth() + 1);
+    else d.setDate(d.getDate() + 7);
+    setCurrentDate(d);
+  };
+
+  const header = view === "month"
+    ? currentDate.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })
+    : `${weekCells[0].toLocaleDateString("pt-BR", { day: "numeric", month: "short" })} – ${weekCells[6].toLocaleDateString("pt-BR", { day: "numeric", month: "short", year: "numeric" })}`;
+
   return (
-    <div className="rounded-xl border bg-card p-3">
-      <p className="mb-3 font-semibold capitalize">{now.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</p>
-      <div className="grid grid-cols-7 gap-1 text-center text-xs text-muted-foreground">
-        {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((d) => <div key={d} className="py-1">{d}</div>)}
-      </div>
-      <div className="grid grid-cols-7 gap-1">
-        {cells.map((d, i) => (
-          <div key={i} className="group min-h-20 rounded-md border p-1 text-xs">
-            {d && (
-              <>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">{d}</span>
-                  <button onClick={() => onNew(iso(d))} className="opacity-0 transition group-hover:opacity-100"><Plus className="h-3 w-3" /></button>
-                </div>
-                <div className="mt-1 space-y-1">
-                  {posts.filter((p) => p.scheduled_date === iso(d)).map((p) => (
-                    <button key={p.id} onClick={() => onOpen(p.id)} className="block w-full truncate rounded px-1 py-0.5 text-left text-[10px]">
-                      <StatusBadge status={p.status} />
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
+    <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+      <div className="rounded-xl border bg-card p-3">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Button size="icon" variant="ghost" onClick={goPrev}><ChevronLeft className="h-4 w-4" /></Button>
+            <p className="font-semibold capitalize">{header}</p>
+            <Button size="icon" variant="ghost" onClick={goNext}><ChevronRight className="h-4 w-4" /></Button>
           </div>
-        ))}
+          <div className="flex gap-1">
+            <Button size="sm" variant={view === "month" ? "default" : "outline"} onClick={() => setView("month")}>Mês</Button>
+            <Button size="sm" variant={view === "week" ? "default" : "outline"} onClick={() => setView("week")}>Semana</Button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-7 gap-1 text-center text-xs text-muted-foreground">
+          {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((d) => <div key={d} className="py-1">{d}</div>)}
+        </div>
+
+        {view === "month" ? (
+          <div className="grid grid-cols-7 gap-1">
+            {monthCells.map((d, i) => (
+              <DayCell
+                key={i}
+                day={d}
+                dateStr={d ? iso(d) : ""}
+                posts={d ? posts.filter((p) => p.scheduled_date === iso(d)) : []}
+                onOpen={onOpen}
+                onNew={onNew}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-7 gap-1">
+            {weekCells.map((d, i) => {
+              const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+              return (
+                <DayCell
+                  key={i}
+                  day={d.getDate()}
+                  dateStr={dateStr}
+                  posts={posts.filter((p) => p.scheduled_date === dateStr)}
+                  onOpen={onOpen}
+                  onNew={onNew}
+                />
+              );
+            })}
+          </div>
+        )}
       </div>
+
+      <DragOverlay dropAnimation={null}>
+        {activePost ? (
+          <div className="pointer-events-none opacity-90">
+            <StatusBadge status={activePost.status} flowStage={activePost.flow_stage} approvalMode={activePost.approval_mode} />
+          </div>
+        ) : null}
+      </DragOverlay>
+    </DndContext>
+  );
+}
+
+function DayCell({ day, dateStr, posts: dayPosts, onOpen, onNew }: { day: number | null; dateStr: string; posts: Post[]; onOpen: (id: string) => void; onNew: (date: string) => void }) {
+  const { setNodeRef, isOver } = useDroppable({ id: dateStr, disabled: !day });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "group min-h-20 rounded-md border p-1 text-xs transition-colors",
+        isOver && "bg-accent/60 ring-2 ring-primary"
+      )}
+    >
+      {day && (
+        <>
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">{day}</span>
+            <button onClick={() => onNew(dateStr)} className="opacity-0 transition group-hover:opacity-100"><Plus className="h-3 w-3" /></button>
+          </div>
+          <div className="mt-1 space-y-1">
+            {dayPosts.map((p) => (
+              <DraggablePost key={p.id} post={p} onOpen={onOpen} />
+            ))}
+          </div>
+        </>
+      )}
     </div>
+  );
+}
+
+function DraggablePost({ post, onOpen }: { post: Post; onOpen: (id: string) => void }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: post.id,
+    disabled: post.status === "published",
+    data: { post },
+  });
+
+  const style = transform
+    ? { transform: CSS.Translate.toString(transform) }
+    : undefined;
+
+  return (
+    <button
+      ref={setNodeRef}
+      style={style}
+      {...listeners}
+      {...attributes}
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpen(post.id);
+      }}
+      className={cn(
+        "block w-full truncate rounded px-1 py-0.5 text-left text-[10px]",
+        isDragging && "opacity-30",
+        post.status === "published" && "cursor-default"
+      )}
+    >
+      <StatusBadge status={post.status} flowStage={post.flow_stage} approvalMode={post.approval_mode} />
+    </button>
   );
 }
 
