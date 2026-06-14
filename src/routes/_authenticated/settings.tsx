@@ -173,6 +173,8 @@ function Settings() {
           )}
         </TabsContent>
       </Tabs>
+
+      <ConfirmDialog state={confirm} onOpenChange={(o) => !o && setConfirm(null)} />
     </div>
   );
 }
