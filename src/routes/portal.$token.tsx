@@ -183,6 +183,23 @@ function PortalPostDialog({ token, post, onClose, onChanged }: { token: string; 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg">
+        {result ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-8 text-center">
+            <div className={`flex h-16 w-16 items-center justify-center rounded-full ${result === "approved" ? "bg-success/15 text-success-foreground" : "bg-warning/15 text-warning-foreground"}`}>
+              {result === "approved" ? <CheckCircle2 className="h-8 w-8" /> : <PencilLine className="h-8 w-8" />}
+            </div>
+            <h3 className="text-lg font-bold">
+              {result === "approved" ? "✅ Post aprovado!" : "✏️ Ajuste solicitado!"}
+            </h3>
+            <p className="max-w-xs text-sm text-muted-foreground">
+              {result === "approved"
+                ? "A equipe foi notificada e seguirá com a produção."
+                : "Enviamos seu pedido para a equipe. Aguarde o retorno com a nova versão."}
+            </p>
+            <Button className="mt-2 w-full" onClick={onClose}>Voltar aos posts</Button>
+          </div>
+        ) : (
+        <>
         <DialogHeader><DialogTitle className="flex items-center gap-2">{post.title} <StatusBadge status={post.status} flowStage={post.flow_stage} approvalMode={post.approval_mode} /></DialogTitle></DialogHeader>
         <div className="space-y-4">
           {post.approval_mode === "flow" && post.status !== "approved" && (
