@@ -1,9 +1,11 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Clock, AlertTriangle, CheckCircle2, Users, ArrowRight } from "lucide-react";
-import { STATUS_LABELS, type Post, type Client, type ActivityLog } from "@/lib/content";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/empty-state";
+import { Clock, AlertTriangle, CheckCircle2, Users, ArrowRight, Activity } from "lucide-react";
+import { type Post, type Client, type ActivityLog } from "@/lib/content";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -13,7 +15,8 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 });
 
 function Dashboard() {
-  const { data } = useQuery({
+  const navigate = useNavigate();
+  const { data, isLoading } = useQuery({
     queryKey: ["dashboard"],
     queryFn: async () => {
       const [posts, clients, activity] = await Promise.all([
@@ -29,6 +32,7 @@ function Dashboard() {
     },
   });
 
+
   const posts = data?.posts ?? [];
   const weekAgo = Date.now() - 7 * 864e5;
   const inApproval = posts.filter((p) => p.status === "in_approval").length;
@@ -42,11 +46,17 @@ function Dashboard() {
         <p className="text-muted-foreground">Visão geral da produção e aprovações.</p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Stat icon={Clock} label="Em aprovação" value={inApproval} tone="warning" />
-        <Stat icon={AlertTriangle} label="Ajustes pendentes" value={adjustments} tone="destructive" />
-        <Stat icon={CheckCircle2} label="Aprovados na semana" value={approvedWeek} tone="success" />
-      </div>
+      {isLoading ? (
+        <div className="grid gap-4 sm:grid-cols-3">
+          {[0, 1, 2].map((i) => <Skeleton key={i} className="h-24" />)}
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Stat icon={Clock} label="Em aprovação" value={inApproval} tone="warning" />
+          <Stat icon={AlertTriangle} label="Ajustes pendentes" value={adjustments} tone="destructive" />
+          <Stat icon={CheckCircle2} label="Aprovados na semana" value={approvedWeek} tone="success" />
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
         <Card>
@@ -54,7 +64,10 @@ function Dashboard() {
             <CardTitle>Atividade recente</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {data?.activity.length === 0 && <p className="text-sm text-muted-foreground">Sem atividade ainda.</p>}
+            {isLoading && [0, 1, 2].map((i) => <Skeleton key={i} className="h-8" />)}
+            {!isLoading && data?.activity.length === 0 && (
+              <EmptyState icon={Activity} title="Nenhuma atividade ainda" description="As ações da equipe e dos clientes aparecerão aqui." className="border-0 p-6" />
+            )}
             {data?.activity.map((a) => (
               <div key={a.id} className="flex items-center justify-between border-b pb-2 last:border-0 text-sm">
                 <span>
@@ -74,6 +87,10 @@ function Dashboard() {
             <Link to="/clients" className="text-sm text-primary inline-flex items-center gap-1">Ver todos <ArrowRight className="h-3 w-3" /></Link>
           </CardHeader>
           <CardContent className="space-y-2">
+            {isLoading && [0, 1].map((i) => <Skeleton key={i} className="h-14" />)}
+            {!isLoading && data?.clients.length === 0 && (
+              <EmptyState icon={Users} title="Nenhum cliente cadastrado" description="Adicione um cliente para começar." actionLabel="Adicionar cliente" onAction={() => navigate({ to: "/clients" })} className="border-0 p-6" />
+            )}
             {data?.clients.map((c) => {
               const pending = posts.filter((p) => p.client_id === c.id && (p.status === "in_approval" || p.status === "adjustment_requested")).length;
               return (

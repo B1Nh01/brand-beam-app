@@ -15,6 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ConfirmDialog, type ConfirmState } from "@/components/confirm-dialog";
 import { Copy, Trash2, UserPlus, Clock } from "lucide-react";
 import { toast } from "sonner";
 
@@ -28,6 +29,8 @@ function Settings() {
   const { data: ws } = useWorkspace();
   const [name, setName] = useState("");
   const [me, setMe] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmState | null>(null);
+
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
@@ -133,7 +136,12 @@ function Settings() {
                       {m.role === "owner" ? "Dono" : "Membro"}
                     </span>
                     {isOwner && m.role !== "owner" && (
-                      <Button variant="ghost" size="icon" onClick={() => removeMember(m.user_id)}>
+                      <Button variant="ghost" size="icon" onClick={() => setConfirm({
+                        title: "Remover membro?",
+                        description: `${m.name} perderá o acesso a este workspace. Esta ação não pode ser desfeita, mas você pode convidá-lo novamente depois.`,
+                        confirmLabel: "Remover",
+                        onConfirm: async () => { await removeMember(m.user_id); },
+                      })}>
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     )}
@@ -165,6 +173,8 @@ function Settings() {
           )}
         </TabsContent>
       </Tabs>
+
+      <ConfirmDialog state={confirm} onOpenChange={(o) => !o && setConfirm(null)} />
     </div>
   );
 }
@@ -194,6 +204,7 @@ function InviteDialog({
     setLoading(false);
     if (error || !data) return toast.error("Não foi possível criar o convite");
     setCreatedToken(data.token);
+    toast.success("Convite criado");
     onCreated();
   };
 
