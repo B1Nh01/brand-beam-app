@@ -29,6 +29,8 @@ function Settings() {
   const { data: ws } = useWorkspace();
   const [name, setName] = useState("");
   const [me, setMe] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmState | null>(null);
+
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setMe(data.user?.id ?? null));
