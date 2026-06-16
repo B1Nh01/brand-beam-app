@@ -18,41 +18,25 @@ DROP POLICY IF EXISTS "team delete media" ON storage.objects;
 CREATE POLICY "workspace read media" ON storage.objects FOR SELECT TO authenticated
 USING (
   bucket_id = 'post-media' AND
-  EXISTS (
-    SELECT 1 FROM public.workspace_members
-    WHERE user_id = auth.uid()
-      AND workspace_id::text = (storage.foldername(name))[1]
-  )
+  public.user_in_workspace((storage.foldername(name))[1]::uuid)
 );
 
 CREATE POLICY "workspace upload media" ON storage.objects FOR INSERT TO authenticated
 WITH CHECK (
   bucket_id = 'post-media' AND
-  EXISTS (
-    SELECT 1 FROM public.workspace_members
-    WHERE user_id = auth.uid()
-      AND workspace_id::text = (storage.foldername(name))[1]
-  )
+  public.user_in_workspace((storage.foldername(name))[1]::uuid)
 );
 
 CREATE POLICY "workspace update media" ON storage.objects FOR UPDATE TO authenticated
 USING (
   bucket_id = 'post-media' AND
-  EXISTS (
-    SELECT 1 FROM public.workspace_members
-    WHERE user_id = auth.uid()
-      AND workspace_id::text = (storage.foldername(name))[1]
-  )
+  public.user_in_workspace((storage.foldername(name))[1]::uuid)
 );
 
 CREATE POLICY "workspace delete media" ON storage.objects FOR DELETE TO authenticated
 USING (
   bucket_id = 'post-media' AND
-  EXISTS (
-    SELECT 1 FROM public.workspace_members
-    WHERE user_id = auth.uid()
-      AND workspace_id::text = (storage.foldername(name))[1]
-  )
+  public.user_in_workspace((storage.foldername(name))[1]::uuid)
 );
 
 -- Portal (anon): permite gerar signed URLs apenas para mídia de posts
