@@ -201,7 +201,7 @@ export function RevenueTab({ revenues, clients, workspaceId, onRefresh }: Props)
                         title: "Excluir receita?",
                         description: `"${r.description}" será excluída permanentemente.`,
                         confirmLabel: "Excluir",
-                        onConfirm: async () => deleteRevenue(r),
+                        onConfirm: async () => { await deleteRevenue(r); },
                       })
                     }
                   >
