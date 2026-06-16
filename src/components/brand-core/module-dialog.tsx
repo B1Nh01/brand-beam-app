@@ -89,7 +89,7 @@ export function ModuleDialog({ clientId, workspaceId, type, module, onClose }: P
   };
 
   const save = async () => {
-    const content = buildContent();
+    const content = buildContent() as Record<string, unknown> as never;
     if (module) {
       const { error } = await supabase.from("brand_modules").update({ content }).eq("id", module.id);
       if (error) return toast.error(error.message);

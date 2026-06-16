@@ -69,6 +69,163 @@ export type Database = {
           },
         ]
       }
+      brand_files: {
+        Row: {
+          client_id: string
+          created_at: string
+          folder_id: string | null
+          id: string
+          mime_type: string
+          name: string
+          size_bytes: number
+          storage_path: string
+          uploaded_by: string | null
+          visible_in_portal: boolean
+          workspace_id: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          folder_id?: string | null
+          id?: string
+          mime_type: string
+          name: string
+          size_bytes: number
+          storage_path: string
+          uploaded_by?: string | null
+          visible_in_portal?: boolean
+          workspace_id: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          folder_id?: string | null
+          id?: string
+          mime_type?: string
+          name?: string
+          size_bytes?: number
+          storage_path?: string
+          uploaded_by?: string | null
+          visible_in_portal?: boolean
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_files_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "brand_files_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "brand_folders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "brand_files_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      brand_folders: {
+        Row: {
+          client_id: string
+          created_at: string
+          id: string
+          name: string
+          visible_in_portal: boolean
+          workspace_id: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          id?: string
+          name: string
+          visible_in_portal?: boolean
+          workspace_id: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          id?: string
+          name?: string
+          visible_in_portal?: boolean
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_folders_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "brand_folders_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      brand_modules: {
+        Row: {
+          client_id: string
+          content: Json
+          created_at: string
+          id: string
+          title: string
+          type: Database["public"]["Enums"]["brand_module_type"]
+          updated_at: string
+          visible_in_portal: boolean
+          workspace_id: string
+        }
+        Insert: {
+          client_id: string
+          content?: Json
+          created_at?: string
+          id?: string
+          title: string
+          type: Database["public"]["Enums"]["brand_module_type"]
+          updated_at?: string
+          visible_in_portal?: boolean
+          workspace_id: string
+        }
+        Update: {
+          client_id?: string
+          content?: Json
+          created_at?: string
+          id?: string
+          title?: string
+          type?: Database["public"]["Enums"]["brand_module_type"]
+          updated_at?: string
+          visible_in_portal?: boolean
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_modules_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "brand_modules_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
           avatar_url: string | null
@@ -120,6 +277,163 @@ export type Database = {
             foreignKeyName: "clients_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      financial_expenses: {
+        Row: {
+          amount: number
+          category: Database["public"]["Enums"]["expense_category"]
+          created_at: string
+          description: string
+          due_date: string
+          id: string
+          notes: string | null
+          paid_at: string | null
+          status: Database["public"]["Enums"]["fin_status"]
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          amount: number
+          category?: Database["public"]["Enums"]["expense_category"]
+          created_at?: string
+          description: string
+          due_date: string
+          id?: string
+          notes?: string | null
+          paid_at?: string | null
+          status?: Database["public"]["Enums"]["fin_status"]
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          amount?: number
+          category?: Database["public"]["Enums"]["expense_category"]
+          created_at?: string
+          description?: string
+          due_date?: string
+          id?: string
+          notes?: string | null
+          paid_at?: string | null
+          status?: Database["public"]["Enums"]["fin_status"]
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financial_expenses_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      financial_revenues: {
+        Row: {
+          amount: number
+          category: string
+          client_id: string | null
+          created_at: string
+          description: string
+          due_date: string
+          id: string
+          is_recurring: boolean
+          notes: string | null
+          paid_at: string | null
+          recurrence_day: number | null
+          status: Database["public"]["Enums"]["fin_status"]
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          amount: number
+          category?: string
+          client_id?: string | null
+          created_at?: string
+          description: string
+          due_date: string
+          id?: string
+          is_recurring?: boolean
+          notes?: string | null
+          paid_at?: string | null
+          recurrence_day?: number | null
+          status?: Database["public"]["Enums"]["fin_status"]
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          amount?: number
+          category?: string
+          client_id?: string | null
+          created_at?: string
+          description?: string
+          due_date?: string
+          id?: string
+          is_recurring?: boolean
+          notes?: string | null
+          paid_at?: string | null
+          recurrence_day?: number | null
+          status?: Database["public"]["Enums"]["fin_status"]
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financial_revenues_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financial_revenues_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      financial_settings: {
+        Row: {
+          auto_generate_revenues: boolean
+          created_at: string
+          currency: string
+          default_revenue_category: string
+          id: string
+          revenue_generation_day: number
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          auto_generate_revenues?: boolean
+          created_at?: string
+          currency?: string
+          default_revenue_category?: string
+          id?: string
+          revenue_generation_day?: number
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          auto_generate_revenues?: boolean
+          created_at?: string
+          currency?: string
+          default_revenue_category?: string
+          id?: string
+          revenue_generation_day?: number
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financial_settings_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: true
             referencedRelation: "workspaces"
             referencedColumns: ["id"]
           },
@@ -279,6 +593,117 @@ export type Database = {
           },
         ]
       }
+      task_comments: {
+        Row: {
+          author_id: string | null
+          author_name: string
+          body: string
+          created_at: string
+          id: string
+          task_id: string
+        }
+        Insert: {
+          author_id?: string | null
+          author_name: string
+          body: string
+          created_at?: string
+          id?: string
+          task_id: string
+        }
+        Update: {
+          author_id?: string | null
+          author_name?: string
+          body?: string
+          created_at?: string
+          id?: string
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_comments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tasks: {
+        Row: {
+          assignee_id: string | null
+          client_id: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string
+          description: string | null
+          due_date: string | null
+          id: string
+          position: number
+          post_id: string | null
+          priority: Database["public"]["Enums"]["task_priority"]
+          status: Database["public"]["Enums"]["task_status"]
+          title: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          assignee_id?: string | null
+          client_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          position?: number
+          post_id?: string | null
+          priority?: Database["public"]["Enums"]["task_priority"]
+          status?: Database["public"]["Enums"]["task_status"]
+          title: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          assignee_id?: string | null
+          client_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          position?: number
+          post_id?: string | null
+          priority?: Database["public"]["Enums"]["task_priority"]
+          status?: Database["public"]["Enums"]["task_status"]
+          title?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workspace_invites: {
         Row: {
           created_at: string
@@ -412,6 +837,10 @@ export type Database = {
         }
       }
       accept_invite: { Args: { _token: string }; Returns: string }
+      generate_monthly_revenues: {
+        Args: { _workspace_id: string }
+        Returns: Json
+      }
       get_invite: {
         Args: { _token: string }
         Returns: {
@@ -431,6 +860,11 @@ export type Database = {
           role: Database["public"]["Enums"]["app_workspace_role"]
           user_id: string
         }[]
+      }
+      my_open_task_count: { Args: never; Returns: number }
+      overdue_revenue_count: {
+        Args: { _workspace_id: string }
+        Returns: number
       }
       portal_add_comment: {
         Args: {
@@ -484,6 +918,9 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      portal_get_brand_files: { Args: { _token: string }; Returns: Json }
+      portal_get_brand_folders: { Args: { _token: string }; Returns: Json }
+      portal_get_brand_modules: { Args: { _token: string }; Returns: Json }
       portal_get_client: {
         Args: { _token: string }
         Returns: {
@@ -593,17 +1030,33 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      regenerate_portal_token: { Args: { _client_id: string }; Returns: string }
       remove_workspace_member: {
         Args: { _user_id: string; _workspace_id: string }
         Returns: undefined
       }
+      update_task_positions: { Args: { _updates: Json }; Returns: undefined }
       user_in_workspace: { Args: { _workspace_id: string }; Returns: boolean }
     }
     Enums: {
       app_workspace_role: "owner" | "member"
       approval_mode: "fast" | "flow"
+      brand_module_type:
+        | "diagnosis"
+        | "persona"
+        | "competitors"
+        | "positioning"
+        | "product_ladder"
       client_status: "active" | "paused" | "archived"
       comment_author_type: "team" | "client"
+      expense_category:
+        | "ferramentas"
+        | "trafego_pago"
+        | "freelancer"
+        | "infraestrutura"
+        | "impostos"
+        | "outros"
+      fin_status: "pending" | "paid" | "overdue" | "cancelled"
       flow_stage: "idea" | "copy" | "media" | "final"
       invite_status: "pending" | "accepted" | "expired"
       post_format: "static" | "carousel" | "reels" | "story"
@@ -615,6 +1068,8 @@ export type Database = {
         | "approved"
         | "scheduled"
         | "published"
+      task_priority: "low" | "medium" | "high" | "urgent"
+      task_status: "backlog" | "todo" | "in_progress" | "in_review" | "done"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -744,8 +1199,24 @@ export const Constants = {
     Enums: {
       app_workspace_role: ["owner", "member"],
       approval_mode: ["fast", "flow"],
+      brand_module_type: [
+        "diagnosis",
+        "persona",
+        "competitors",
+        "positioning",
+        "product_ladder",
+      ],
       client_status: ["active", "paused", "archived"],
       comment_author_type: ["team", "client"],
+      expense_category: [
+        "ferramentas",
+        "trafego_pago",
+        "freelancer",
+        "infraestrutura",
+        "impostos",
+        "outros",
+      ],
+      fin_status: ["pending", "paid", "overdue", "cancelled"],
       flow_stage: ["idea", "copy", "media", "final"],
       invite_status: ["pending", "accepted", "expired"],
       post_format: ["static", "carousel", "reels", "story"],
@@ -758,6 +1229,8 @@ export const Constants = {
         "scheduled",
         "published",
       ],
+      task_priority: ["low", "medium", "high", "urgent"],
+      task_status: ["backlog", "todo", "in_progress", "in_review", "done"],
     },
   },
 } as const

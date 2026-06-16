@@ -174,7 +174,7 @@ export function ExpenseTab({ expenses, workspaceId, onRefresh }: Props) {
                         title: "Excluir despesa?",
                         description: `"${e.description}" será excluída permanentemente.`,
                         confirmLabel: "Excluir",
-                        onConfirm: async () => deleteExpense(e),
+                        onConfirm: async () => { await deleteExpense(e); },
                       })
                     }
                   >
