@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/finance")({
   component: Finance,
-  head: () => ({ meta: [{ title: "Financeiro — Aprova" }] }),
+  head: () => ({ meta: [{ title: "Financeiro — Stúdio" }] }),
 });
 
 function Finance() {

@@ -3,7 +3,7 @@ import { TaskBoard } from "@/components/task-board";
 
 export const Route = createFileRoute("/_authenticated/tasks")({
   component: TasksPage,
-  head: () => ({ meta: [{ title: "Tarefas — Aprova" }] }),
+  head: () => ({ meta: [{ title: "Tarefas — Stúdio" }] }),
 });
 
 function TasksPage() {

@@ -11,7 +11,7 @@ import { ptBR } from "date-fns/locale";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
-  head: () => ({ meta: [{ title: "Dashboard — Aprova" }] }),
+  head: () => ({ meta: [{ title: "Dashboard — Stúdio" }] }),
 });
 
 function Dashboard() {
