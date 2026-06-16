@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { TaskBoard } from "@/components/task-board";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -72,6 +73,7 @@ function ClientSpace() {
           <TabsTrigger value="calendar">Calendário</TabsTrigger>
           <TabsTrigger value="feed">Feed Preview</TabsTrigger>
           <TabsTrigger value="content">Conteúdos</TabsTrigger>
+          <TabsTrigger value="tasks">Tarefas</TabsTrigger>
         </TabsList>
 
         <TabsContent value="calendar" className="pt-4">
@@ -96,6 +98,10 @@ function ClientSpace() {
               </Card>
             ))}
           </div>
+        </TabsContent>
+
+        <TabsContent value="tasks" className="pt-4">
+          <TaskBoard fixedClientId={id} />
         </TabsContent>
       </Tabs>
 
@@ -335,11 +341,13 @@ function FeedPreview({ posts, clientId, onOpen }: { posts: Post[]; clientId: str
   });
 
   const persistOrder = async (ordered: Post[]) => {
-    const updates = ordered.map((p, i) => ({ ...p, position: i }));
-    const { error } = await supabase
-      .from("posts")
-      .upsert(updates, { onConflict: "id" });
-    if (error) {
+    const results = await Promise.all(
+      ordered.map((p, i) =>
+        supabase.from("posts").update({ position: i }).eq("id", p.id)
+      )
+    );
+    const failed = results.find((r) => r.error);
+    if (failed?.error) {
       toast.error("Erro ao atualizar ordem");
       return false;
     }

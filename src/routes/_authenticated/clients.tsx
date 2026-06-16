@@ -55,8 +55,7 @@ function Clients() {
     toast.success("Link do portal copiado");
   };
   const regen = async (c: Client) => {
-    const token = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
-    const { error } = await supabase.from("clients").update({ portal_token: token }).eq("id", c.id);
+    const { error } = await supabase.rpc("regenerate_portal_token", { _client_id: c.id });
     if (error) return toast.error("Não foi possível regenerar o token");
     toast.success("Token regenerado"); refresh();
   };

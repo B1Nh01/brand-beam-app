@@ -53,7 +53,10 @@ function InvitePage() {
       const { error: acceptErr } = await supabase.rpc("accept_invite", { _token: token });
       if (!active) return;
       if (acceptErr) {
-        setState({ kind: "invalid", message: "Não foi possível aceitar o convite." });
+        const msg = acceptErr.message?.includes("email_mismatch")
+          ? "Este convite foi enviado para outro e-mail. Entre com o e-mail correto."
+          : "Não foi possível aceitar o convite.";
+        setState({ kind: "invalid", message: msg });
         return;
       }
       localStorage.removeItem("pending_invite");

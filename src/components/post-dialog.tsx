@@ -29,7 +29,11 @@ import {
   type PostMedia,
 } from "@/lib/content";
 import { toast } from "sonner";
-import { Send, Upload, Trash2, ImageOff } from "lucide-react";
+import { Send, Upload, Trash2, ImageOff, ListChecks, ChevronDown, ChevronUp, Plus } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { TaskDialog } from "@/components/task-dialog";
+import { type Task, TASK_STATUS_LABELS, TASK_PRIORITY_CLASSES } from "@/lib/content";
+import { cn } from "@/lib/utils";
 
 type Props = {
   postId: string | null;
@@ -44,6 +48,9 @@ export function PostDialog({ postId, newForClient, onClose }: Props) {
 
   const [form, setForm] = useState<Partial<Post>>({});
   const [comment, setComment] = useState("");
+  const [tasksOpen, setTasksOpen] = useState(false);
+  const [editTaskId, setEditTaskId] = useState<string | null>(null);
+  const [newTaskValues, setNewTaskValues] = useState<Partial<Task> | null>(null);
 
   const postQuery = useQuery({
     queryKey: ["post", postId],
@@ -77,6 +84,15 @@ export function PostDialog({ postId, newForClient, onClose }: Props) {
     queryFn: async () => {
       const { data } = await supabase.from("post_comments").select("*").eq("post_id", postId!).order("created_at");
       return (data ?? []) as PostComment[];
+    },
+  });
+
+  const linkedTasksQuery = useQuery({
+    queryKey: ["tasks-by-post", postId],
+    enabled: !!postId,
+    queryFn: async () => {
+      const { data } = await supabase.from("tasks").select("*").eq("post_id", postId!).order("position");
+      return (data ?? []) as Task[];
     },
   });
 
@@ -167,13 +183,30 @@ export function PostDialog({ postId, newForClient, onClose }: Props) {
     invalidate();
   };
 
+  const ALLOWED_MIME: Record<string, string> = {
+    "image/jpeg": "jpg", "image/png": "png", "image/gif": "gif",
+    "image/webp": "webp", "image/heic": "heic",
+    "video/mp4": "mp4", "video/quicktime": "mov", "video/webm": "webm",
+  };
+  const MAX_FILE_BYTES = 50 * 1024 * 1024; // 50 MB
+
   const upload = async (files: FileList | null) => {
     if (!files || !postId) return;
     const existing = mediaQuery.data?.length ?? 0;
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      const path = `${form.workspace_id}/${postId}/${Date.now()}-${i}-${file.name}`;
-      const { error } = await supabase.storage.from("post-media").upload(path, file);
+      const ext = ALLOWED_MIME[file.type];
+      if (!ext) {
+        toast.error(`Tipo não permitido: ${file.name}`);
+        continue;
+      }
+      if (file.size > MAX_FILE_BYTES) {
+        toast.error(`Arquivo muito grande (máx 50 MB): ${file.name}`);
+        continue;
+      }
+      const safeName = `${Date.now()}-${i}.${ext}`;
+      const path = `${form.workspace_id}/${postId}/${safeName}`;
+      const { error } = await supabase.storage.from("post-media").upload(path, file, { contentType: file.type });
       if (error) {
         toast.error(error.message);
         continue;
@@ -284,6 +317,64 @@ export function PostDialog({ postId, newForClient, onClose }: Props) {
 
           {!isNew && (
             <div className="flex max-h-[85vh] flex-col">
+              {/* Tarefas vinculadas */}
+              <Collapsible open={tasksOpen} onOpenChange={setTasksOpen}>
+                <div className="flex items-center justify-between border-b px-3 py-2.5">
+                  <CollapsibleTrigger asChild>
+                    <button className="flex flex-1 items-center gap-2 text-left text-sm font-semibold hover:text-primary transition-colors">
+                      <ListChecks className="h-4 w-4 shrink-0" />
+                      Tarefas vinculadas
+                      {(linkedTasksQuery.data?.length ?? 0) > 0 && (
+                        <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-muted px-1 text-[10px] font-bold">
+                          {linkedTasksQuery.data!.length}
+                        </span>
+                      )}
+                      {tasksOpen ? <ChevronUp className="ml-auto h-3 w-3" /> : <ChevronDown className="ml-auto h-3 w-3" />}
+                    </button>
+                  </CollapsibleTrigger>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="ml-1 h-6 w-6 shrink-0"
+                    title="Criar tarefa para este post"
+                    onClick={() =>
+                      setNewTaskValues({ post_id: postId!, client_id: form.client_id ?? undefined })
+                    }
+                  >
+                    <Plus className="h-3 w-3" />
+                  </Button>
+                </div>
+                <CollapsibleContent className="border-b">
+                  <div className="max-h-52 overflow-y-auto p-2 space-y-1">
+                    {linkedTasksQuery.data?.length === 0 && (
+                      <p className="px-2 py-3 text-xs text-muted-foreground">Nenhuma tarefa vinculada.</p>
+                    )}
+                    {linkedTasksQuery.data?.map((task) => (
+                      <button
+                        key={task.id}
+                        onClick={() => setEditTaskId(task.id)}
+                        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-accent transition-colors"
+                      >
+                        <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold", TASK_PRIORITY_CLASSES[task.priority])}>
+                          {TASK_STATUS_LABELS[task.status]}
+                        </span>
+                        <span className="flex-1 truncate">{task.title}</span>
+                      </button>
+                    ))}
+                    <button
+                      onClick={() =>
+                        setNewTaskValues({ post_id: postId!, client_id: form.client_id ?? undefined })
+                      }
+                      className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                    >
+                      <Plus className="h-3 w-3" />
+                      Criar tarefa para este post
+                    </button>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+
+              {/* Chat do post */}
               <div className="border-b p-4">
                 <h3 className="text-sm font-semibold">Chat do post</h3>
                 <p className="text-xs text-muted-foreground">Conversa com o cliente</p>
@@ -306,6 +397,28 @@ export function PostDialog({ postId, newForClient, onClose }: Props) {
                 <Button size="icon" onClick={addComment}><Send className="h-4 w-4" /></Button>
               </div>
             </div>
+          )}
+
+          {/* TaskDialog — criar/editar tarefa a partir do post */}
+          {newTaskValues && (
+            <TaskDialog
+              initialValues={newTaskValues}
+              onClose={() => {
+                setNewTaskValues(null);
+                qc.invalidateQueries({ queryKey: ["tasks-by-post", postId] });
+                qc.invalidateQueries({ queryKey: ["tasks"] });
+              }}
+            />
+          )}
+          {editTaskId && (
+            <TaskDialog
+              taskId={editTaskId}
+              onClose={() => {
+                setEditTaskId(null);
+                qc.invalidateQueries({ queryKey: ["tasks-by-post", postId] });
+                qc.invalidateQueries({ queryKey: ["tasks"] });
+              }}
+            />
           )}
         </div>
       </DialogContent>

@@ -1,5 +1,60 @@
 import type { Database } from "@/integrations/supabase/types";
 
+// ─── Task types (not yet in generated types) ───────────────────
+export type TaskStatus   = "backlog" | "todo" | "in_progress" | "in_review" | "done";
+export type TaskPriority = "low" | "medium" | "high" | "urgent";
+
+export type Task = {
+  id: string;
+  workspace_id: string;
+  client_id: string | null;
+  post_id: string | null;
+  title: string;
+  description: string | null;
+  status: TaskStatus;
+  priority: TaskPriority;
+  assignee_id: string | null;
+  due_date: string | null;
+  position: number;
+  created_by: string;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TaskComment = {
+  id: string;
+  task_id: string;
+  author_id: string | null;
+  author_name: string;
+  body: string;
+  created_at: string;
+};
+
+export const TASK_STATUS_ORDER: TaskStatus[] = ["backlog", "todo", "in_progress", "in_review", "done"];
+
+export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
+  backlog:     "Backlog",
+  todo:        "A fazer",
+  in_progress: "Em progresso",
+  in_review:   "Em revisão",
+  done:        "Concluído",
+};
+
+export const TASK_PRIORITY_LABELS: Record<TaskPriority, string> = {
+  low:    "Baixa",
+  medium: "Média",
+  high:   "Alta",
+  urgent: "Urgente",
+};
+
+export const TASK_PRIORITY_CLASSES: Record<TaskPriority, string> = {
+  low:    "bg-muted text-muted-foreground",
+  medium: "bg-primary/10 text-primary border border-primary/20",
+  high:   "bg-warning/20 text-warning-foreground border border-warning/40",
+  urgent: "bg-destructive/15 text-destructive border border-destructive/30",
+};
+
 export type Client = Database["public"]["Tables"]["clients"]["Row"];
 export type Post = Database["public"]["Tables"]["posts"]["Row"];
 export type PostMedia = Database["public"]["Tables"]["post_media"]["Row"];

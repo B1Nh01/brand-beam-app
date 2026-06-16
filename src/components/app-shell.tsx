@@ -15,6 +15,7 @@ import {
   CalendarClock,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 import {
   Sidebar,
   SidebarContent,
@@ -32,23 +33,32 @@ import {
 import { Button } from "@/components/ui/button";
 
 const mainItems = [
-  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
-  { title: "Clientes", url: "/clients", icon: Users },
-  { title: "Visão central", url: "/content", icon: KanbanSquare },
-  { title: "Configurações", url: "/settings", icon: Settings },
+  { title: "Dashboard",    url: "/dashboard", icon: LayoutDashboard },
+  { title: "Clientes",     url: "/clients",   icon: Users },
+  { title: "Visão central",url: "/content",   icon: KanbanSquare },
+  { title: "Tarefas",      url: "/tasks",     icon: ListChecks },
+  { title: "Configurações",url: "/settings",  icon: Settings },
 ];
 
 const soonItems = [
-  { title: "Tarefas", icon: ListChecks },
-  { title: "Brand Core", icon: Sparkles },
-  { title: "Financeiro", icon: Wallet },
-  { title: "Notificações", icon: Bell },
+  { title: "Brand Core",  icon: Sparkles },
+  { title: "Financeiro",  icon: Wallet },
+  { title: "Notificações",icon: Bell },
   { title: "Agendamento", icon: CalendarClock },
 ];
 
 function AppSidebar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
+
+  const { data: openTaskCount = 0 } = useQuery<number>({
+    queryKey: ["my-open-tasks"],
+    queryFn: async () => {
+      const { data } = await supabase.rpc("my_open_task_count");
+      return (data as number) ?? 0;
+    },
+    refetchInterval: 60_000,
+  });
 
   const logout = async () => {
     await supabase.auth.signOut();
@@ -68,6 +78,7 @@ function AppSidebar() {
           </div>
         </div>
       </SidebarHeader>
+
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel>Menu</SidebarGroupLabel>
@@ -78,7 +89,12 @@ function AppSidebar() {
                   <SidebarMenuButton asChild isActive={pathname.startsWith(item.url)}>
                     <Link to={item.url} className="flex items-center gap-2">
                       <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
+                      <span className="flex-1">{item.title}</span>
+                      {item.url === "/tasks" && openTaskCount > 0 && (
+                        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+                          {openTaskCount > 99 ? "99+" : openTaskCount}
+                        </span>
+                      )}
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -86,6 +102,7 @@ function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
         <SidebarGroup>
           <SidebarGroupLabel>Em breve</SidebarGroupLabel>
           <SidebarGroupContent>
@@ -103,6 +120,7 @@ function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+
       <SidebarFooter>
         <Button variant="ghost" className="justify-start" onClick={logout}>
           <LogOut className="h-4 w-4" /> Sair
@@ -122,6 +140,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       if (!error) toast.success("Você entrou no workspace!");
     })();
   }, []);
+
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full bg-background">

@@ -1,4 +1,11 @@
 @import "tailwindcss" source(none);
+
+@keyframes confetti-fall {
+  to {
+    transform: translateY(110vh) rotate(var(--r, 360deg));
+    opacity: 0;
+  }
+}
 @source "../src";
 @import "tw-animate-css";
 
