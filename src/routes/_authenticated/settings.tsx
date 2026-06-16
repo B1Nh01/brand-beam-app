@@ -23,7 +23,7 @@ import { type FinancialSettings } from "@/lib/financial";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   component: Settings,
-  head: () => ({ meta: [{ title: "Configurações — Aprova" }] }),
+  head: () => ({ meta: [{ title: "Configurações — Stúdio" }] }),
 });
 
 function Settings() {

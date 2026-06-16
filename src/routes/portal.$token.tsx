@@ -15,7 +15,7 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/portal/$token")({
   component: Portal,
-  head: () => ({ meta: [{ title: "Portal do cliente — Aprova" }] }),
+  head: () => ({ meta: [{ title: "Portal do cliente — Stúdio" }] }),
 });
 
 function Portal() {
@@ -78,7 +78,7 @@ function Portal() {
             <p className="truncate font-extrabold">{client.name}</p>
             <p className="truncate text-xs text-muted-foreground">{client.instagram_handle}</p>
           </div>
-          <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground"><Sparkles className="h-3 w-3" /> Aprova</span>
+          <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground"><Sparkles className="h-3 w-3" /> Stúdio</span>
         </div>
       </header>
 

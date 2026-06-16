@@ -88,7 +88,7 @@ function AppSidebar() {
             <Sparkles className="h-5 w-5" />
           </div>
           <div className="leading-tight">
-            <p className="font-extrabold tracking-tight">Aprova</p>
+            <p className="font-extrabold tracking-tight">Stúdio</p>
             <p className="text-xs text-muted-foreground">Gestão de conteúdo</p>
           </div>
         </div>

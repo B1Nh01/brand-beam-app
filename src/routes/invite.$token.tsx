@@ -8,7 +8,7 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/invite/$token")({
   component: InvitePage,
-  head: () => ({ meta: [{ title: "Convite — Aprova" }] }),
+  head: () => ({ meta: [{ title: "Convite — Stúdio" }] }),
 });
 
 type State =
@@ -75,7 +75,7 @@ function InvitePage() {
           <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
             <Sparkles className="h-6 w-6" />
           </div>
-          <h1 className="text-2xl font-extrabold tracking-tight">Aprova</h1>
+          <h1 className="text-2xl font-extrabold tracking-tight">Stúdio</h1>
         </div>
         <Card>
           {state.kind === "loading" || state.kind === "accepting" ? (

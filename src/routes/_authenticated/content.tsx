@@ -13,7 +13,7 @@ import { STATUS_LABELS, STATUS_ORDER, type Post, type Client } from "@/lib/conte
 
 export const Route = createFileRoute("/_authenticated/content")({
   component: ContentBoard,
-  head: () => ({ meta: [{ title: "Visão central — Aprova" }] }),
+  head: () => ({ meta: [{ title: "Visão central — Stúdio" }] }),
 });
 
 function ContentBoard() {
