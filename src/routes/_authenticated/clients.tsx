@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Plus, MoreVertical, Copy, RefreshCw, Pause, Archive, UsersRound } from "lucide-react";
 import { type Client, type Post } from "@/lib/content";
+import { type FinancialRevenue, formatBRL, monthRange } from "@/lib/financial";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/clients")({
@@ -27,27 +28,55 @@ function Clients() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [ig, setIg] = useState("");
+  const [feeStr, setFeeStr] = useState("0,00");
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["clients-page"],
     queryFn: async () => {
-      const [clients, posts] = await Promise.all([
+      const now = new Date();
+      const { start, end } = monthRange(now.getFullYear(), now.getMonth() + 1);
+      const [clients, posts, revenues] = await Promise.all([
         supabase.from("clients").select("*").order("created_at"),
         supabase.from("posts").select("id,client_id,status"),
+        supabase
+          .from("financial_revenues")
+          .select("client_id,status")
+          .gte("due_date", start)
+          .lte("due_date", end)
+          .neq("status", "cancelled"),
       ]);
-      return { clients: (clients.data ?? []) as Client[], posts: (posts.data ?? []) as Pick<Post, "id" | "client_id" | "status">[] };
+      return {
+        clients:  (clients.data ?? []) as Client[],
+        posts:    (posts.data ?? []) as Pick<Post, "id" | "client_id" | "status">[],
+        revenues: (revenues.data ?? []) as Pick<FinancialRevenue, "client_id" | "status">[],
+      };
     },
   });
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["clients-page"] });
 
+  const handleFeeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const digits = e.target.value.replace(/\D/g, "");
+    const num = digits ? parseInt(digits, 10) / 100 : 0;
+    setFeeStr(num.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+  };
+
   const create = async () => {
     if (!ws || !name.trim()) return;
-    const { error } = await supabase.from("clients").insert({ workspace_id: ws.id, name, instagram_handle: ig || null });
+    const fee = parseFloat(feeStr.replace(/\./g, "").replace(",", ".")) || 0;
+    const { data: created, error } = await supabase
+      .from("clients")
+      .insert({ workspace_id: ws.id, name, instagram_handle: ig || null, monthly_fee: fee || null })
+      .select()
+      .single();
     if (error) return toast.error(error.message);
     toast.success("Cliente criado");
-    setName(""); setIg(""); setOpen(false); refresh();
+    setName(""); setIg(""); setFeeStr("0,00"); setOpen(false); refresh();
+    // Auto-generate revenue if fee set
+    if (fee > 0 && created) {
+      await supabase.rpc("generate_monthly_revenues", { _workspace_id: ws.id });
+    }
   };
 
   const copyLink = (c: Client) => {
@@ -80,6 +109,10 @@ function Clients() {
             <div className="space-y-4">
               <div className="space-y-2"><Label>Nome</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
               <div className="space-y-2"><Label>Instagram</Label><Input value={ig} onChange={(e) => setIg(e.target.value)} placeholder="@cliente" /></div>
+              <div className="space-y-2">
+                <Label>Mensalidade (R$)</Label>
+                <Input value={feeStr} onChange={handleFeeChange} inputMode="numeric" placeholder="0,00" />
+              </div>
               <Button onClick={create} className="w-full">Criar</Button>
             </div>
           </DialogContent>
@@ -102,6 +135,9 @@ function Clients() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {data?.clients.map((c) => {
             const pending = data.posts.filter((p) => p.client_id === c.id && (p.status === "in_approval" || p.status === "adjustment_requested")).length;
+            const fee = Number((c as Client & { monthly_fee?: number }).monthly_fee ?? 0);
+            const monthRevenue = data.revenues.find((r) => r.client_id === c.id);
+            const payStatus = monthRevenue?.status;
             return (
               <Card key={c.id} className={c.status !== "active" ? "opacity-60" : ""}>
                 <CardContent className="p-5">
@@ -137,6 +173,16 @@ function Clients() {
                     <span className="text-muted-foreground">Pendentes</span>
                     <span className="rounded-full bg-warning/20 px-2 py-0.5 text-xs text-warning-foreground">{pending}</span>
                   </div>
+                  {fee > 0 && (
+                    <div className="mt-2 flex items-center justify-between text-xs">
+                      <span className="font-medium text-muted-foreground">{formatBRL(fee)}/mês</span>
+                      {payStatus === "paid" ? (
+                        <span title="Mensalidade paga">✅</span>
+                      ) : payStatus ? (
+                        <span title="Mensalidade pendente">🟡</span>
+                      ) : null}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             );
