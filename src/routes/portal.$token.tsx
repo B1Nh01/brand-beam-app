@@ -9,7 +9,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { StatusBadge } from "@/components/status-badge";
 import { FLOW_LABELS, type Post, type PostComment } from "@/lib/content";
-import { Check, Pencil, Send, Sparkles, CheckCircle2, PencilLine, Inbox, PartyPopper } from "lucide-react";
+import { Check, Pencil, Send, Sparkles, CheckCircle2, PencilLine, Inbox, PartyPopper, Layers, FileText, Download } from "lucide-react";
+import { type BrandModule, type BrandFile, type BrandFolder, MODULE_META, MODULE_ORDER, formatFileSize } from "@/lib/brand-core";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/portal/$token")({
@@ -25,11 +26,20 @@ function Portal() {
   const { data, isLoading } = useQuery({
     queryKey: ["portal", token],
     queryFn: async () => {
-      const [client, posts] = await Promise.all([
+      const [client, posts, brandModules, brandFolders, brandFiles] = await Promise.all([
         supabase.rpc("portal_get_client", { _token: token }),
         supabase.rpc("portal_get_posts", { _token: token }),
+        supabase.rpc("portal_get_brand_modules", { _token: token }),
+        supabase.rpc("portal_get_brand_folders", { _token: token }),
+        supabase.rpc("portal_get_brand_files", { _token: token }),
       ]);
-      return { client: client.data?.[0] ?? null, posts: (posts.data ?? []) as Post[] };
+      return {
+        client: client.data?.[0] ?? null,
+        posts: (posts.data ?? []) as Post[],
+        brandModules: (brandModules.data ?? []) as BrandModule[],
+        brandFolders: (brandFolders.data ?? []) as BrandFolder[],
+        brandFiles: (brandFiles.data ?? []) as BrandFile[],
+      };
     },
   });
 
@@ -53,6 +63,10 @@ function Portal() {
 
   const client = data.client;
   const posts = data.posts;
+  const brandModules = data.brandModules ?? [];
+  const brandFolders = data.brandFolders ?? [];
+  const brandFiles = data.brandFiles ?? [];
+  const hasBrandCore = brandModules.length > 0 || brandFiles.length > 0;
   const pending = posts.filter((p) => p.status === "in_approval" || p.status === "adjustment_requested");
 
   return (
@@ -115,6 +129,15 @@ function Portal() {
           </>
         )}
       </main>
+
+      {hasBrandCore && (
+        <PortalBrandCore
+          token={token}
+          modules={brandModules}
+          folders={brandFolders}
+          files={brandFiles}
+        />
+      )}
 
       {openPost && (
         <PortalPostDialog
@@ -255,4 +278,177 @@ function PortalMedia({ path, type }: { path: string; type: string }) {
   });
   if (!data) return <div className="aspect-square rounded bg-muted" />;
   return type === "video" ? <video src={data} controls className="aspect-square w-full rounded object-cover" /> : <img src={data} alt="mídia" className="aspect-square w-full rounded object-cover" />;
+}
+
+// ── Brand Core (portal read-only) ─────────────────────────────────────────────
+
+function PortalBrandCore({ token, modules, folders, files }: {
+  token: string;
+  modules: BrandModule[];
+  folders: BrandFolder[];
+  files: BrandFile[];
+}) {
+  return (
+    <section className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Layers className="h-5 w-5 text-primary" />
+        <h2 className="font-semibold">Documentos da Marca</h2>
+      </div>
+
+      {modules.length > 0 && (
+        <div className="space-y-3">
+          {MODULE_ORDER.filter((t) => modules.some((m) => m.type === t)).map((type) => {
+            const mod = modules.find((m) => m.type === type)!;
+            return <PortalModuleCard key={type} mod={mod} />;
+          })}
+        </div>
+      )}
+
+      {files.length > 0 && (
+        <div className="rounded-xl border bg-card">
+          <div className="px-4 py-3 border-b">
+            <p className="text-sm font-semibold">Arquivos</p>
+          </div>
+          <div className="divide-y">
+            {folders.map((folder) => {
+              const folderFiles = files.filter((f) => f.folder_id === folder.id);
+              if (folderFiles.length === 0) return null;
+              return (
+                <div key={folder.id}>
+                  <div className="px-4 py-2 bg-muted/30">
+                    <p className="text-xs font-medium text-muted-foreground">{folder.name}</p>
+                  </div>
+                  {folderFiles.map((file) => (
+                    <PortalFileRow key={file.id} file={file} />
+                  ))}
+                </div>
+              );
+            })}
+            {files.filter((f) => f.folder_id === null).map((file) => (
+              <PortalFileRow key={file.id} file={file} />
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function PortalModuleCard({ mod }: { mod: BrandModule }) {
+  const meta = MODULE_META[mod.type];
+  const c = mod.content as Record<string, unknown>;
+
+  const renderFields = () => {
+    if (mod.type === "diagnosis") {
+      const rows = [
+        ["Segmento", c.segmento], ["Tempo no mercado", c.tempo_mercado],
+        ["Tom de voz", c.tom_voz], ["Diferenciais", c.diferenciais],
+        ["Desafios", c.desafios], ["Objetivos nas redes", c.objetivos_redes],
+        ["Referências visuais", c.referencias_visuais], ["Palavras a evitar", c.palavras_proibidas],
+      ].filter(([, v]) => v);
+      return rows.map(([label, value]) => (
+        <div key={label as string}>
+          <p className="text-xs font-semibold text-muted-foreground mb-0.5">{label as string}</p>
+          <p className="text-sm whitespace-pre-wrap">{value as string}</p>
+        </div>
+      ));
+    }
+    if (mod.type === "positioning") {
+      const rows = [
+        ["Proposta de valor", c.proposta_valor], ["Missão", c.missao],
+        ["Visão", c.visao], ["Valores", c.valores],
+        ["Arquétipo", c.arquetipo], ["Mensagem central", c.mensagem_central],
+        ["Hashtags", c.hashtags],
+      ].filter(([, v]) => v);
+      return rows.map(([label, value]) => (
+        <div key={label as string}>
+          <p className="text-xs font-semibold text-muted-foreground mb-0.5">{label as string}</p>
+          <p className="text-sm whitespace-pre-wrap">{value as string}</p>
+        </div>
+      ));
+    }
+    if (mod.type === "persona") {
+      return (c.personas as Record<string, string>[] ?? []).map((p, i) => (
+        <div key={i} className="rounded-lg border p-3 space-y-1">
+          <p className="font-semibold text-sm">{p.nome || `Persona ${i + 1}`}</p>
+          {p.profissao && <p className="text-xs text-muted-foreground">{p.profissao} · {p.idade}</p>}
+          {p.dores && <p className="text-xs"><strong>Dores:</strong> {p.dores}</p>}
+          {p.desejos && <p className="text-xs"><strong>Desejos:</strong> {p.desejos}</p>}
+        </div>
+      ));
+    }
+    if (mod.type === "competitors") {
+      return (c.competitors as Record<string, string>[] ?? []).map((comp, i) => (
+        <div key={i} className="rounded-lg border p-3 space-y-1">
+          <p className="font-semibold text-sm">{comp.nome || `Concorrente ${i + 1}`}</p>
+          {comp.instagram && <p className="text-xs text-muted-foreground">{comp.instagram}</p>}
+          {comp.pontos_fortes && <p className="text-xs"><strong>Pontos fortes:</strong> {comp.pontos_fortes}</p>}
+          {comp.diferencial_nosso && <p className="text-xs"><strong>Nosso diferencial:</strong> {comp.diferencial_nosso}</p>}
+        </div>
+      ));
+    }
+    if (mod.type === "product_ladder") {
+      return (c.products as Record<string, string>[] ?? []).map((prod, i) => (
+        <div key={i} className="rounded-lg border p-3 space-y-0.5">
+          <div className="flex items-center gap-2">
+            <p className="font-semibold text-sm flex-1">{prod.nome || `Produto ${i + 1}`}</p>
+            {prod.tipo && <span className="text-[10px] bg-muted rounded px-1.5 py-0.5">{prod.tipo}</span>}
+            {prod.preco && <span className="text-xs font-medium text-primary">{prod.preco}</span>}
+          </div>
+          {prod.descricao && <p className="text-xs text-muted-foreground">{prod.descricao}</p>}
+        </div>
+      ));
+    }
+    return null;
+  };
+
+  return (
+    <div className="rounded-xl border bg-card p-4 space-y-3">
+      <p className="font-semibold text-sm">{meta.title}</p>
+      <div className="space-y-3">{renderFields()}</div>
+    </div>
+  );
+}
+
+function PortalFileRow({ file }: { file: BrandFile }) {
+  const download = async () => {
+    const { data } = await supabase.storage
+      .from("brand-files")
+      .createSignedUrl(file.storage_path, 3600, { download: file.name });
+    if (data?.signedUrl) window.open(data.signedUrl, "_blank");
+  };
+
+  const isImage = file.mime_type.startsWith("image/");
+
+  return (
+    <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30">
+      {isImage
+        ? <PortalImagePreview path={file.storage_path} />
+        : <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+      }
+      <div className="flex-1 min-w-0">
+        <p className="text-sm truncate">{file.name}</p>
+        <p className="text-[10px] text-muted-foreground">{formatFileSize(file.size_bytes)}</p>
+      </div>
+      <button
+        onClick={download}
+        className="flex items-center gap-1 text-xs text-primary hover:underline shrink-0"
+      >
+        <Download className="h-3 w-3" /> Baixar
+      </button>
+    </div>
+  );
+}
+
+function PortalImagePreview({ path }: { path: string }) {
+  const { data: url } = useQuery({
+    queryKey: ["brand-preview-portal", path],
+    queryFn: async () => {
+      const { data } = await supabase.storage.from("brand-files").createSignedUrl(path, 3600);
+      return data?.signedUrl ?? null;
+    },
+    staleTime: 55 * 60 * 1000,
+  });
+  if (!url) return <FileText className="h-4 w-4 text-muted-foreground shrink-0" />;
+  return <img src={url} alt="" className="h-8 w-8 rounded object-cover shrink-0 border" />;
 }

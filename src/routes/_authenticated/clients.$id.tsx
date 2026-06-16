@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { TaskBoard } from "@/components/task-board";
+import { BrandCore } from "@/components/brand-core";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -74,6 +75,7 @@ function ClientSpace() {
           <TabsTrigger value="feed">Feed Preview</TabsTrigger>
           <TabsTrigger value="content">Conteúdos</TabsTrigger>
           <TabsTrigger value="tasks">Tarefas</TabsTrigger>
+          <TabsTrigger value="brand">Brand Core</TabsTrigger>
         </TabsList>
 
         <TabsContent value="calendar" className="pt-4">
@@ -102,6 +104,10 @@ function ClientSpace() {
 
         <TabsContent value="tasks" className="pt-4">
           <TaskBoard fixedClientId={id} />
+        </TabsContent>
+
+        <TabsContent value="brand" className="pt-4">
+          {client && <BrandCore clientId={id} workspaceId={client.workspace_id} />}
         </TabsContent>
       </Tabs>
 

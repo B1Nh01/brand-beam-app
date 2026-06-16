@@ -13,6 +13,7 @@ import {
   Wallet,
   Bell,
   CalendarClock,
+  Layers,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
@@ -35,13 +36,13 @@ import { Button } from "@/components/ui/button";
 const mainItems = [
   { title: "Dashboard",    url: "/dashboard", icon: LayoutDashboard },
   { title: "Clientes",     url: "/clients",   icon: Users },
+  { title: "Brand Core",   url: "/clients",   icon: Layers },
   { title: "Visão central",url: "/content",   icon: KanbanSquare },
   { title: "Tarefas",      url: "/tasks",     icon: ListChecks },
   { title: "Configurações",url: "/settings",  icon: Settings },
 ];
 
 const soonItems = [
-  { title: "Brand Core",  icon: Sparkles },
   { title: "Financeiro",  icon: Wallet },
   { title: "Notificações",icon: Bell },
   { title: "Agendamento", icon: CalendarClock },
