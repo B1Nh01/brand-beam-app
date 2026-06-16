@@ -1030,6 +1030,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      regenerate_portal_token: { Args: { _client_id: string }; Returns: string }
       remove_workspace_member: {
         Args: { _user_id: string; _workspace_id: string }
         Returns: undefined
