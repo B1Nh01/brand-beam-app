@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useWorkspace } from "@/hooks/use-workspace";
@@ -54,6 +54,7 @@ type ClientsData = {
 
 function Clients() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const { data: ws } = useWorkspace();
   const role = useRole();
   const isOwner = role === "owner";
@@ -163,7 +164,11 @@ function Clients() {
             const gradient = clientGradient(c.id);
 
             return (
-              <div key={c.id} className={cn("overflow-hidden rounded-xl border bg-card transition-shadow hover:shadow-sm", c.status !== "active" && "opacity-60")}>
+              <div
+                key={c.id}
+                className={cn("cursor-pointer overflow-hidden rounded-xl border bg-card transition-shadow hover:shadow-md", c.status !== "active" && "opacity-60")}
+                onClick={() => navigate({ to: "/clients/$id", params: { id: c.id } })}
+              >
                 {/* Gradient strip */}
                 <div className="relative h-20" style={{ background: gradient }}>
                   {cover && (
@@ -178,7 +183,7 @@ function Clients() {
                     </div>
                   )}
                   <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
+                    <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                       <Button variant="secondary" size="icon" className="absolute right-2 top-2 h-7 w-7 bg-black/30 text-white backdrop-blur hover:bg-black/50">
                         <MoreVertical className="h-4 w-4" />
                       </Button>
@@ -205,7 +210,7 @@ function Clients() {
                   </DropdownMenu>
                 </div>
 
-                <Link to="/clients/$id" params={{ id: c.id }} className="block p-4 pt-0">
+                <div className="block p-4 pt-0">
                   <div className="-mt-7 mb-2 flex items-end justify-between gap-2">
                     <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border-4 border-card text-base font-bold text-white" style={{ background: gradient }}>
                       {avatar ? <img src={avatar} alt="" loading="lazy" className="h-full w-full object-cover" /> : c.name.charAt(0)}
@@ -235,7 +240,7 @@ function Clients() {
                       <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">Sem posts</span>
                     )}
                   </div>
-                </Link>
+                </div>
               </div>
             );
           })}

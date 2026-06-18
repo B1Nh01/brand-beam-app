@@ -6,11 +6,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent } from "@/components/ui/card";
 import { StatusBadge } from "@/components/status-badge";
 import { PostDialog } from "@/components/post-dialog";
 import { Plus, ChevronLeft, ChevronRight, Heart, MessageCircle, Grid3x3, ArrowUpDown } from "lucide-react";
-import { FORMAT_LABELS, type Post, type Client } from "@/lib/content";
+import { type Post, type Client } from "@/lib/content";
 import {
   DndContext,
   DragOverlay,
@@ -105,43 +104,20 @@ function ClientSpace() {
         <div className="-mx-1 overflow-x-auto pb-1">
           <TabsList className="w-max">
             <TabsTrigger value="calendar">Calendário</TabsTrigger>
-            <TabsTrigger value="feed">Feed Preview</TabsTrigger>
-            <TabsTrigger value="content">Conteúdos</TabsTrigger>
             <TabsTrigger value="tasks">Tarefas</TabsTrigger>
-            <TabsTrigger value="brand">Brand Core</TabsTrigger>
+            <TabsTrigger value="arquivos">Arquivos</TabsTrigger>
           </TabsList>
         </div>
 
-
         <TabsContent value="calendar" className="pt-4">
           <CalendarView posts={posts} clientId={id} onOpen={setOpenPost} onNew={(d) => client && setNewPost({ clientId: client.id, workspaceId: client.workspace_id, date: d })} />
-        </TabsContent>
-
-        <TabsContent value="feed" className="pt-4">
-          <FeedPreview posts={posts} clientId={id} onOpen={setOpenPost} />
-        </TabsContent>
-
-        <TabsContent value="content" className="pt-4">
-          <div className="grid gap-3">
-            {posts.map((p) => (
-              <Card key={p.id} className="cursor-pointer hover:bg-accent" onClick={() => setOpenPost(p.id)}>
-                <CardContent className="flex items-center justify-between p-4">
-                  <div>
-                    <p className="font-medium">{p.title}</p>
-                    <p className="text-xs text-muted-foreground">{FORMAT_LABELS[p.format]} · {p.scheduled_date ?? "Sem data"}</p>
-                  </div>
-                  <StatusBadge status={p.status} flowStage={p.flow_stage} approvalMode={p.approval_mode} />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
         </TabsContent>
 
         <TabsContent value="tasks" className="pt-4">
           <TaskBoard fixedClientId={id} />
         </TabsContent>
 
-        <TabsContent value="brand" className="pt-4">
+        <TabsContent value="arquivos" className="pt-4">
           {client && <BrandCore clientId={id} workspaceId={client.workspace_id} />}
         </TabsContent>
       </Tabs>
@@ -154,7 +130,7 @@ function ClientSpace() {
 function CalendarView({ posts, clientId, onOpen, onNew }: { posts: Post[]; clientId: string; onOpen: (id: string) => void; onNew: (date: string) => void }) {
   const qc = useQueryClient();
   const [activePost, setActivePost] = useState<Post | null>(null);
-  const [view, setView] = useState<"month" | "week">("month");
+  const [view, setView] = useState<"month" | "week" | "feed">("month");
   const [currentDate, setCurrentDate] = useState(() => new Date());
 
   const sensors = useSensors(
@@ -230,6 +206,23 @@ function CalendarView({ posts, clientId, onOpen, onNew }: { posts: Post[]; clien
     ? currentDate.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })
     : `${weekCells[0].toLocaleDateString("pt-BR", { day: "numeric", month: "short" })} – ${weekCells[6].toLocaleDateString("pt-BR", { day: "numeric", month: "short", year: "numeric" })}`;
 
+  const viewToggle = (
+    <div className="flex gap-1">
+      <Button size="sm" variant={view === "month" ? "default" : "outline"} onClick={() => setView("month")}>Mês</Button>
+      <Button size="sm" variant={view === "week" ? "default" : "outline"} onClick={() => setView("week")}>Semana</Button>
+      <Button size="sm" variant={view === "feed" ? "default" : "outline"} onClick={() => setView("feed")}>Feed</Button>
+    </div>
+  );
+
+  if (view === "feed") {
+    return (
+      <div>
+        <div className="mb-3 flex items-center justify-end">{viewToggle}</div>
+        <FeedPreview posts={posts} clientId={clientId} onOpen={onOpen} />
+      </div>
+    );
+  }
+
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div className="rounded-xl border bg-card p-3">
@@ -239,10 +232,7 @@ function CalendarView({ posts, clientId, onOpen, onNew }: { posts: Post[]; clien
             <p className="font-semibold capitalize">{header}</p>
             <Button size="icon" variant="ghost" onClick={goNext}><ChevronRight className="h-4 w-4" /></Button>
           </div>
-          <div className="flex gap-1">
-            <Button size="sm" variant={view === "month" ? "default" : "outline"} onClick={() => setView("month")}>Mês</Button>
-            <Button size="sm" variant={view === "week" ? "default" : "outline"} onClick={() => setView("week")}>Semana</Button>
-          </div>
+          {viewToggle}
         </div>
 
         <div className="grid grid-cols-7 gap-1 text-center text-xs text-muted-foreground">
