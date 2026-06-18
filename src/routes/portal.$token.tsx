@@ -11,6 +11,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatusBadge } from "@/components/status-badge";
 import { FLOW_LABELS, FLOW_ORDER, type Post, type PostComment, type FlowStage } from "@/lib/content";
 import { Check, Pencil, Send, Sparkles, CheckCircle2, PencilLine, Inbox, PartyPopper, Layers, FileText, Download, Lock } from "lucide-react";
+import { type BrandModule, type BrandFile, type BrandFolder, MODULE_META, MODULE_ORDER, formatFileSize } from "@/lib/brand-core";
+import { toast } from "sonner";
 
 type PostStage = { id: string; post_id: string; stage: string; status: string; content: Record<string, string> | null };
 
@@ -20,8 +22,6 @@ const STAGE_DOT: Record<string, string> = {
   adjustment_requested: "#ef4444",
   approved: "#22c55e",
 };
-import { type BrandModule, type BrandFile, type BrandFolder, MODULE_META, MODULE_ORDER, formatFileSize } from "@/lib/brand-core";
-import { toast } from "sonner";
 
 export const Route = createFileRoute("/portal/$token")({
   component: Portal,

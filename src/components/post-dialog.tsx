@@ -165,14 +165,15 @@ export function PostDialog({ postId, newForClient, onClose }: Props) {
     },
   });
 
+  const clientId = postQuery.data?.client_id ?? null;
   const clientQuery = useQuery({
-    queryKey: ["client-preview", form.client_id],
-    enabled: !!form.client_id && !isNew,
+    queryKey: ["client-preview", clientId],
+    enabled: !!clientId && !isNew,
     queryFn: async () => {
       const { data } = await supabase
         .from("clients")
         .select("name,instagram_handle")
-        .eq("id", form.client_id!)
+        .eq("id", clientId!)
         .single();
       return data;
     },
@@ -213,7 +214,10 @@ export function PostDialog({ postId, newForClient, onClose }: Props) {
     const temaStage = stagesQuery.data?.find((s) => s.stage === "tema");
     if (temaStage?.content) {
       const c = temaStage.content as Record<string, string>;
-      setRefLinks([c.ref_link_1 ?? "", c.ref_link_2 ?? "", c.ref_link_3 ?? ""]);
+      const r1 = c.ref_link_1 ?? "";
+      const r2 = c.ref_link_2 ?? "";
+      const r3 = c.ref_link_3 ?? "";
+      setRefLinks((prev) => (prev[0] === r1 && prev[1] === r2 && prev[2] === r3 ? prev : [r1, r2, r3]));
     }
   }, [stagesQuery.data]);
 
