@@ -3,18 +3,16 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useWorkspace } from "@/hooks/use-workspace";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/empty-state";
 import { ConfirmDialog, type ConfirmState } from "@/components/confirm-dialog";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, MoreVertical, Copy, RefreshCw, Pause, Archive, UsersRound } from "lucide-react";
+import { Plus, MoreVertical, Copy, RefreshCw, Pause, Archive, UsersRound, Pencil, Play } from "lucide-react";
 import { type Client, type Post } from "@/lib/content";
 import { type FinancialRevenue, formatBRL, monthRange } from "@/lib/financial";
+import { ClientFormDialog } from "@/components/client-form-dialog";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/clients")({
@@ -22,16 +20,21 @@ export const Route = createFileRoute("/_authenticated/clients")({
   head: () => ({ meta: [{ title: "Clientes — Stúdio" }] }),
 });
 
+type ClientsData = {
+  clients: Client[];
+  posts: Pick<Post, "id" | "client_id" | "status">[];
+  revenues: Pick<FinancialRevenue, "client_id" | "status">[];
+  media: Record<string, string>;
+};
+
 function Clients() {
   const qc = useQueryClient();
   const { data: ws } = useWorkspace();
   const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [ig, setIg] = useState("");
-  const [feeStr, setFeeStr] = useState("0,00");
+  const [editing, setEditing] = useState<Client | null>(null);
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading } = useQuery<ClientsData>({
     queryKey: ["clients-page"],
     queryFn: async () => {
       const now = new Date();
@@ -46,38 +49,33 @@ function Clients() {
           .lte("due_date", end)
           .neq("status", "cancelled"),
       ]);
+
+      const clientRows = (clients.data ?? []) as Client[];
+
+      // Batch-create signed URLs for avatars + covers
+      const paths = clientRows
+        .flatMap((c) => [c.avatar_url, c.cover_url])
+        .filter((p): p is string => !!p && !p.startsWith("http"));
+      const media: Record<string, string> = {};
+      if (paths.length) {
+        const { data: signed } = await supabase.storage.from("client-media").createSignedUrls(paths, 3600);
+        for (const s of signed ?? []) {
+          if (s.path && s.signedUrl) media[s.path] = s.signedUrl;
+        }
+      }
+
       return {
-        clients:  (clients.data ?? []) as Client[],
-        posts:    (posts.data ?? []) as Pick<Post, "id" | "client_id" | "status">[],
+        clients: clientRows,
+        posts: (posts.data ?? []) as Pick<Post, "id" | "client_id" | "status">[],
         revenues: (revenues.data ?? []) as Pick<FinancialRevenue, "client_id" | "status">[],
+        media,
       };
     },
   });
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["clients-page"] });
-
-  const handleFeeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const digits = e.target.value.replace(/\D/g, "");
-    const num = digits ? parseInt(digits, 10) / 100 : 0;
-    setFeeStr(num.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
-  };
-
-  const create = async () => {
-    if (!ws || !name.trim()) return;
-    const fee = parseFloat(feeStr.replace(/\./g, "").replace(",", ".")) || 0;
-    const { data: created, error } = await supabase
-      .from("clients")
-      .insert({ workspace_id: ws.id, name, instagram_handle: ig || null, monthly_fee: fee || null })
-      .select()
-      .single();
-    if (error) return toast.error(error.message);
-    toast.success("Cliente criado");
-    setName(""); setIg(""); setFeeStr("0,00"); setOpen(false); refresh();
-    // Auto-generate revenue if fee set
-    if (fee > 0 && created) {
-      await supabase.rpc("generate_monthly_revenues", { _workspace_id: ws.id });
-    }
-  };
+  const imgUrl = (path: string | null) =>
+    !path ? null : path.startsWith("http") ? path : data?.media[path] ?? null;
 
   const copyLink = (c: Client) => {
     navigator.clipboard.writeText(`${window.location.origin}/portal/${c.portal_token}`);
@@ -97,31 +95,19 @@ function Clients() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-extrabold tracking-tight">Clientes</h1>
-          <p className="text-muted-foreground">Gerencie os espaços dos seus clientes.</p>
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+        <div className="min-w-0">
+          <h1 className="truncate text-xl font-extrabold tracking-tight sm:text-2xl">Clientes</h1>
+          <p className="truncate text-sm text-muted-foreground">Gerencie os espaços dos seus clientes.</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild><Button><Plus className="h-4 w-4" /> Novo cliente</Button></DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Novo cliente</DialogTitle></DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2"><Label>Nome</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
-              <div className="space-y-2"><Label>Instagram</Label><Input value={ig} onChange={(e) => setIg(e.target.value)} placeholder="@cliente" /></div>
-              <div className="space-y-2">
-                <Label>Mensalidade (R$)</Label>
-                <Input value={feeStr} onChange={handleFeeChange} inputMode="numeric" placeholder="0,00" />
-              </div>
-              <Button onClick={create} className="w-full">Criar</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <Button onClick={() => setOpen(true)} className="shrink-0">
+          <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Novo cliente</span>
+        </Button>
       </div>
 
       {isLoading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[0, 1, 2].map((i) => <Skeleton key={i} className="h-32" />)}
+          {[0, 1, 2].map((i) => <Skeleton key={i} className="h-44" />)}
         </div>
       ) : data?.clients.length === 0 ? (
         <EmptyState
@@ -138,43 +124,63 @@ function Clients() {
             const fee = Number((c as Client & { monthly_fee?: number }).monthly_fee ?? 0);
             const monthRevenue = data.revenues.find((r) => r.client_id === c.id);
             const payStatus = monthRevenue?.status;
+            const cover = imgUrl(c.cover_url);
+            const avatar = imgUrl(c.avatar_url);
+            const brand = c.brand_color ?? "#2563eb";
+
             return (
-              <Card key={c.id} className={c.status !== "active" ? "opacity-60" : ""}>
-                <CardContent className="p-5">
-                  <div className="flex items-start justify-between">
-                    <Link to="/clients/$id" params={{ id: c.id }} className="flex min-w-0 items-center gap-3">
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold text-primary-foreground" style={{ backgroundColor: c.brand_color ?? "#7c3aed" }}>{c.name.charAt(0)}</span>
-                      <div className="min-w-0">
-                        <p className="truncate font-semibold">{c.name}</p>
-                        <p className="truncate text-xs text-muted-foreground">{c.instagram_handle ?? "—"}</p>
-                      </div>
-                    </Link>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreVertical className="h-4 w-4" /></Button></DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => copyLink(c)}><Copy className="h-4 w-4" /> Copiar link do portal</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setConfirm({
-                          title: "Regenerar token do portal?",
-                          description: `O link atual do portal de ${c.name} deixará de funcionar imediatamente. Você precisará enviar o novo link ao cliente.`,
-                          confirmLabel: "Regenerar",
-                          onConfirm: async () => { await regen(c); },
-                        })}><RefreshCw className="h-4 w-4" /> Regenerar token</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setStatus(c, c.status === "paused" ? "active" : "paused")}><Pause className="h-4 w-4" /> {c.status === "paused" ? "Reativar" : "Pausar"}</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setConfirm({
-                          title: "Arquivar cliente?",
-                          description: `${c.name} será arquivado e deixará de aparecer entre os clientes ativos. Você pode reativá-lo depois.`,
-                          confirmLabel: "Arquivar",
-                          onConfirm: async () => { await setStatus(c, "archived"); },
-                        })}><Archive className="h-4 w-4" /> Arquivar</DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+              <div key={c.id} className={cn("overflow-hidden rounded-xl border bg-card transition-shadow hover:shadow-sm", c.status !== "active" && "opacity-60")}>
+                {/* Cover */}
+                <div className="relative h-20">
+                  {cover ? (
+                    <img src={cover} alt="" loading="lazy" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="h-full w-full" style={{ background: `linear-gradient(135deg, ${brand}, ${brand}99)` }} />
+                  )}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="secondary" size="icon" className="absolute right-2 top-2 h-7 w-7 bg-background/80 backdrop-blur">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => setEditing(c)}><Pencil className="h-4 w-4" /> Editar</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => copyLink(c)}><Copy className="h-4 w-4" /> Copiar link do portal</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setConfirm({
+                        title: "Regenerar token do portal?",
+                        description: `O link atual do portal de ${c.name} deixará de funcionar imediatamente. Você precisará enviar o novo link ao cliente.`,
+                        confirmLabel: "Regenerar",
+                        onConfirm: async () => { await regen(c); },
+                      })}><RefreshCw className="h-4 w-4" /> Regenerar token</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setStatus(c, c.status === "paused" ? "active" : "paused")}>
+                        {c.status === "paused" ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />} {c.status === "paused" ? "Reativar" : "Pausar"}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setConfirm({
+                        title: "Arquivar cliente?",
+                        description: `${c.name} será arquivado e deixará de aparecer entre os clientes ativos. Você pode reativá-lo depois.`,
+                        confirmLabel: "Arquivar",
+                        onConfirm: async () => { await setStatus(c, "archived"); },
+                      })}><Archive className="h-4 w-4" /> Arquivar</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+
+                <Link to="/clients/$id" params={{ id: c.id }} className="block p-4 pt-0">
+                  <div className="-mt-7 mb-2 flex items-end justify-between gap-2">
+                    <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border-4 border-card text-base font-bold text-primary-foreground" style={{ backgroundColor: brand }}>
+                      {avatar ? <img src={avatar} alt="" loading="lazy" className="h-full w-full object-cover" /> : c.name.charAt(0)}
+                    </span>
+                    {pending > 0 && (
+                      <span className="mb-1 rounded-full bg-warning/20 px-2 py-0.5 text-xs text-warning-foreground">{pending} pendente{pending !== 1 ? "s" : ""}</span>
+                    )}
                   </div>
-                  <div className="mt-4 flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Pendentes</span>
-                    <span className="rounded-full bg-warning/20 px-2 py-0.5 text-xs text-warning-foreground">{pending}</span>
-                  </div>
+                  <p className="truncate font-semibold">{c.name}</p>
+                  <p className="truncate text-xs text-muted-foreground">{c.instagram_handle ?? "—"}</p>
+                  {c.description && (
+                    <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">{c.description}</p>
+                  )}
                   {fee > 0 && (
-                    <div className="mt-2 flex items-center justify-between text-xs">
+                    <div className="mt-3 flex items-center justify-between border-t pt-2 text-xs">
                       <span className="font-medium text-muted-foreground">{formatBRL(fee)}/mês</span>
                       {payStatus === "paid" ? (
                         <span title="Mensalidade paga">✅</span>
@@ -183,11 +189,27 @@ function Clients() {
                       ) : null}
                     </div>
                   )}
-                </CardContent>
-              </Card>
+                </Link>
+              </div>
             );
           })}
         </div>
+      )}
+
+      {ws && (
+        <ClientFormDialog
+          workspaceId={ws.id}
+          open={open}
+          onOpenChange={setOpen}
+        />
+      )}
+      {ws && editing && (
+        <ClientFormDialog
+          workspaceId={ws.id}
+          client={editing}
+          open={!!editing}
+          onOpenChange={(o) => !o && setEditing(null)}
+        />
       )}
 
       <ConfirmDialog state={confirm} onOpenChange={(o) => !o && setConfirm(null)} />

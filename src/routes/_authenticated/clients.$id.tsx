@@ -49,34 +49,66 @@ function ClientSpace() {
         supabase.from("clients").select("*").eq("id", id).single(),
         supabase.from("posts").select("*").eq("client_id", id).order("scheduled_date"),
       ]);
-      return { client: client.data as Client, posts: (posts.data ?? []) as Post[] };
+      const c = client.data as Client | null;
+      const media: Record<string, string> = {};
+      const paths = [c?.avatar_url, c?.cover_url].filter((p): p is string => !!p && !p.startsWith("http"));
+      if (paths.length) {
+        const { data: signed } = await supabase.storage.from("client-media").createSignedUrls(paths, 3600);
+        for (const s of signed ?? []) if (s.path && s.signedUrl) media[s.path] = s.signedUrl;
+      }
+      return { client: c as Client, posts: (posts.data ?? []) as Post[], media };
     },
   });
 
   const client = data?.client;
   const posts = data?.posts ?? [];
+  const imgUrl = (path: string | null | undefined) =>
+    !path ? null : path.startsWith("http") ? path : data?.media[path] ?? null;
+  const cover = imgUrl(client?.cover_url);
+  const avatar = imgUrl(client?.avatar_url);
+  const brand = client?.brand_color ?? "#2563eb";
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          {client && <span className="flex h-12 w-12 items-center justify-center rounded-full text-lg font-bold text-primary-foreground" style={{ backgroundColor: client.brand_color ?? "#7c3aed" }}>{client.name.charAt(0)}</span>}
-          <div>
-            <h1 className="text-2xl font-extrabold tracking-tight">{client?.name}</h1>
-            <p className="text-muted-foreground">{client?.instagram_handle}</p>
-          </div>
+      <div className="overflow-hidden rounded-xl border bg-card">
+        <div className="h-24 sm:h-32">
+          {cover ? (
+            <img src={cover} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <div className="h-full w-full" style={{ background: `linear-gradient(135deg, ${brand}, ${brand}99)` }} />
+          )}
         </div>
-        {client && <Button onClick={() => setNewPost({ clientId: client.id, workspaceId: client.workspace_id })}><Plus className="h-4 w-4" /> Novo post</Button>}
+        <div className="px-4 pb-4">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
+            <div className="flex min-w-0 items-end gap-3">
+              <span className="-mt-8 flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border-4 border-card text-lg font-bold text-primary-foreground" style={{ backgroundColor: brand }}>
+                {avatar ? <img src={avatar} alt="" className="h-full w-full object-cover" /> : (client?.name.charAt(0) ?? "?")}
+              </span>
+              <div className="min-w-0 pb-0.5">
+                <h1 className="truncate text-xl font-extrabold tracking-tight sm:text-2xl">{client?.name}</h1>
+                <p className="truncate text-sm text-muted-foreground">{client?.instagram_handle}</p>
+              </div>
+            </div>
+            {client && <Button className="shrink-0" onClick={() => setNewPost({ clientId: client.id, workspaceId: client.workspace_id })}><Plus className="h-4 w-4" /> <span className="hidden sm:inline">Novo post</span></Button>}
+          </div>
+          {client?.description && (
+            <p className="mt-3 text-sm text-muted-foreground">{client.description}</p>
+          )}
+        </div>
       </div>
 
+
       <Tabs defaultValue="calendar">
-        <TabsList>
-          <TabsTrigger value="calendar">Calendário</TabsTrigger>
-          <TabsTrigger value="feed">Feed Preview</TabsTrigger>
-          <TabsTrigger value="content">Conteúdos</TabsTrigger>
-          <TabsTrigger value="tasks">Tarefas</TabsTrigger>
-          <TabsTrigger value="brand">Brand Core</TabsTrigger>
-        </TabsList>
+        <div className="-mx-1 overflow-x-auto pb-1">
+          <TabsList className="w-max">
+            <TabsTrigger value="calendar">Calendário</TabsTrigger>
+            <TabsTrigger value="feed">Feed Preview</TabsTrigger>
+            <TabsTrigger value="content">Conteúdos</TabsTrigger>
+            <TabsTrigger value="tasks">Tarefas</TabsTrigger>
+            <TabsTrigger value="brand">Brand Core</TabsTrigger>
+          </TabsList>
+        </div>
+
 
         <TabsContent value="calendar" className="pt-4">
           <CalendarView posts={posts} clientId={id} onOpen={setOpenPost} onNew={(d) => client && setNewPost({ clientId: client.id, workspaceId: client.workspace_id, date: d })} />
