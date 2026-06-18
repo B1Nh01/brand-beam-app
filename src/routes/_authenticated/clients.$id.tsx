@@ -99,13 +99,16 @@ function ClientSpace() {
 
 
       <Tabs defaultValue="calendar">
-        <TabsList>
-          <TabsTrigger value="calendar">Calendário</TabsTrigger>
-          <TabsTrigger value="feed">Feed Preview</TabsTrigger>
-          <TabsTrigger value="content">Conteúdos</TabsTrigger>
-          <TabsTrigger value="tasks">Tarefas</TabsTrigger>
-          <TabsTrigger value="brand">Brand Core</TabsTrigger>
-        </TabsList>
+        <div className="-mx-1 overflow-x-auto pb-1">
+          <TabsList className="w-max">
+            <TabsTrigger value="calendar">Calendário</TabsTrigger>
+            <TabsTrigger value="feed">Feed Preview</TabsTrigger>
+            <TabsTrigger value="content">Conteúdos</TabsTrigger>
+            <TabsTrigger value="tasks">Tarefas</TabsTrigger>
+            <TabsTrigger value="brand">Brand Core</TabsTrigger>
+          </TabsList>
+        </div>
+
 
         <TabsContent value="calendar" className="pt-4">
           <CalendarView posts={posts} clientId={id} onOpen={setOpenPost} onNew={(d) => client && setNewPost({ clientId: client.id, workspaceId: client.workspace_id, date: d })} />
