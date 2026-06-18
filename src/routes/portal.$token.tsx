@@ -2,6 +2,7 @@ import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { MediaProofingCanvas, type AnnotationInput } from "@/components/media-proofing-canvas";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatusBadge } from "@/components/status-badge";
 import { FLOW_LABELS, FLOW_ORDER, type Post, type PostComment, type FlowStage } from "@/lib/content";
-import { Check, Pencil, Send, Sparkles, CheckCircle2, PencilLine, Inbox, PartyPopper, Layers, FileText, Download, Lock } from "lucide-react";
+import { Check, Pencil, Send, Sparkles, CheckCircle2, PencilLine, Inbox, PartyPopper, Layers, FileText, Download, Lock, ImageOff, Pin, X } from "lucide-react";
 import { type BrandModule, type BrandFile, type BrandFolder, MODULE_META, MODULE_ORDER, formatFileSize } from "@/lib/brand-core";
 import { toast } from "sonner";
 
@@ -168,6 +169,7 @@ function PortalPostDialog({ token, post, onClose, onChanged }: { token: string; 
   const [adjustStage, setAdjustStage] = useState<FlowStage | null>(null);
   const [activeTab, setActiveTab] = useState<FlowStage>("tema");
   const [allApproved, setAllApproved] = useState(false);
+  const [selectedMediaId, setSelectedMediaId] = useState<string | null>(null);
 
   const isFlowMode = post.approval_mode === "flow";
 
@@ -175,7 +177,8 @@ function PortalPostDialog({ token, post, onClose, onChanged }: { token: string; 
     queryKey: ["portal-media", token, post.id],
     queryFn: async () => {
       const { data } = await supabase.rpc("portal_get_media", { _token: token });
-      return (data ?? []).filter((m: any) => m.post_id === post.id);
+      const list = (data ?? []).filter((m: any) => m.post_id === post.id);
+      return list;
     },
   });
   const { data: comments } = useQuery({
@@ -193,6 +196,51 @@ function PortalPostDialog({ token, post, onClose, onChanged }: { token: string; 
       return (data ?? []) as PostStage[];
     },
   });
+
+  // Auto-select first media
+  const firstMediaId = (media ?? [])[0]?.id ?? null;
+  const effectiveSelectedId = selectedMediaId ?? firstMediaId;
+
+  const portalSelectedUrlQuery = useQuery({
+    queryKey: ["portal-signed-media", token, effectiveSelectedId],
+    enabled: !!effectiveSelectedId,
+    queryFn: async () => {
+      const m = (media ?? []).find((x: any) => x.id === effectiveSelectedId);
+      if (!m) return null;
+      const { data } = await supabase.storage.from("post-media").createSignedUrl(m.storage_path, 3600);
+      return data?.signedUrl ?? null;
+    },
+  });
+
+  const portalAnnotationsQuery = useQuery({
+    queryKey: ["portal-annotations", token, effectiveSelectedId],
+    enabled: !!effectiveSelectedId,
+    queryFn: async () => {
+      const { data } = await supabase.rpc("portal_get_annotations", {
+        _token: token,
+        _post_media_id: effectiveSelectedId!,
+      });
+      return (data ?? []) as any[];
+    },
+  });
+
+  const portalAddAnnotation = async ({ x, y, body: text, timestampSeconds }: AnnotationInput) => {
+    if (!effectiveSelectedId) return;
+    if (!name.trim()) { toast.error("Informe seu nome primeiro"); return; }
+    const { error } = await supabase.rpc("portal_add_annotation", {
+      _token: token,
+      _post_media_id: effectiveSelectedId,
+      _author_name: name,
+      _x: x,
+      _y: y,
+      _body: text,
+      _timestamp_seconds: timestampSeconds ?? null,
+    });
+    if (error) { toast.error("Não foi possível salvar a anotação"); return; }
+    toast.success("Anotação enviada");
+    qc.invalidateQueries({ queryKey: ["portal-annotations", token, effectiveSelectedId] });
+    onChanged();
+  };
 
   const stageMap = Object.fromEntries((stages ?? []).map((s) => [s.stage, s]));
   const getStageStatus = (stage: FlowStage) => stageMap[stage]?.status ?? "draft";
@@ -280,7 +328,7 @@ function PortalPostDialog({ token, post, onClose, onChanged }: { token: string; 
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className={isFlowMode ? "max-w-2xl" : "max-w-lg"}>
+      <DialogContent className={(media?.length ?? 0) > 0 ? "max-w-5xl" : isFlowMode ? "max-w-2xl" : "max-w-lg"}>
         <DialogHeader>
           <DialogTitle className="flex flex-wrap items-center gap-2">
             {post.title}
@@ -356,9 +404,19 @@ function PortalPostDialog({ token, post, onClose, onChanged }: { token: string; 
                         : <p className="text-sm text-muted-foreground">Nenhum conteúdo de copy ainda.</p>
                     )}
                     {stage === "midia" && (
-                      media && media.length > 0
-                        ? <div className="grid grid-cols-3 gap-2">{media.map((m: any) => <PortalMedia key={m.id} path={m.storage_path} type={m.type} />)}</div>
-                        : <p className="text-sm text-muted-foreground">Nenhuma mídia enviada ainda.</p>
+                      media && media.length > 0 ? (
+                        <PortalProofingSection
+                          token={token}
+                          media={media}
+                          selectedId={effectiveSelectedId}
+                          onSelect={setSelectedMediaId}
+                          selectedUrl={portalSelectedUrlQuery.data ?? null}
+                          annotations={portalAnnotationsQuery.data ?? []}
+                          onAdd={portalAddAnnotation}
+                        />
+                      ) : (
+                        <p className="text-sm text-muted-foreground">Nenhuma mídia enviada ainda.</p>
+                      )
                     )}
                     {stage === "legenda" && (
                       post.caption
@@ -419,9 +477,15 @@ function PortalPostDialog({ token, post, onClose, onChanged }: { token: string; 
           /* ── Content Fast: whole-post approval ── */
           <div className="space-y-4">
             {media && media.length > 0 && (
-              <div className="grid grid-cols-3 gap-2">
-                {media.map((m: any) => <PortalMedia key={m.id} path={m.storage_path} type={m.type} />)}
-              </div>
+              <PortalProofingSection
+                token={token}
+                media={media}
+                selectedId={effectiveSelectedId}
+                onSelect={setSelectedMediaId}
+                selectedUrl={portalSelectedUrlQuery.data ?? null}
+                annotations={portalAnnotationsQuery.data ?? []}
+                onAdd={portalAddAnnotation}
+              />
             )}
             {post.caption && <p className="whitespace-pre-wrap rounded-lg border p-3 text-sm">{post.caption}</p>}
 
@@ -449,6 +513,78 @@ function PortalPostDialog({ token, post, onClose, onChanged }: { token: string; 
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ── Portal Proofing Section ───────────────────────────────────────────────────
+
+interface PortalProofingSectionProps {
+  token: string;
+  media: any[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  selectedUrl: string | null;
+  annotations: any[];
+  onAdd: (input: AnnotationInput) => Promise<void>;
+}
+
+function PortalProofingSection({ token, media, selectedId, onSelect, selectedUrl, annotations, onAdd }: PortalProofingSectionProps) {
+  const selectedItem = media.find((m: any) => m.id === selectedId) ?? media[0];
+
+  return (
+    <div className="space-y-2">
+      {/* Thumbnail strip */}
+      {media.length > 1 && (
+        <div className="flex gap-1.5 overflow-x-auto pb-1">
+          {media.map((m: any) => (
+            <PortalThumb key={m.id} path={m.storage_path} type={m.type} isSelected={selectedId === m.id} onSelect={() => onSelect(m.id)} />
+          ))}
+        </div>
+      )}
+
+      {/* Proofing canvas */}
+      <div className="h-[420px] overflow-hidden rounded-xl border">
+        {selectedUrl && selectedItem ? (
+          <MediaProofingCanvas
+            mediaId={selectedItem.id}
+            src={selectedUrl}
+            type={selectedItem.type as "image" | "video"}
+            annotations={annotations}
+            isPortal
+            onAdd={onAdd}
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center">
+            <ImageOff className="h-8 w-8 text-muted-foreground opacity-30" />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PortalThumb({ path, type, isSelected, onSelect }: { path: string; type: string; isSelected: boolean; onSelect: () => void }) {
+  const { data: url } = useQuery({
+    queryKey: ["portal-thumb", path],
+    queryFn: async () => {
+      const { data } = await supabase.storage.from("post-media").createSignedUrl(path, 3600);
+      return data?.signedUrl ?? null;
+    },
+    staleTime: 55 * 60 * 1000,
+  });
+  return (
+    <button
+      onClick={onSelect}
+      className={`h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg border-2 transition ${isSelected ? "border-primary shadow-sm" : "border-transparent hover:border-border"}`}
+    >
+      {url ? (
+        type === "video"
+          ? <video src={url} className="h-full w-full object-cover" />
+          : <img src={url} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <div className="h-full w-full bg-muted" />
+      )}
+    </button>
   );
 }
 

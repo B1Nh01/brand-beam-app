@@ -49,6 +49,7 @@ import {
   Link as LinkIcon,
   Tag as TagIcon,
   X,
+  Pin,
 } from "lucide-react";
 import {
   Popover,
@@ -69,7 +70,8 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { TaskDialog } from "@/components/task-dialog";
-import { type Task, TASK_STATUS_LABELS, TASK_PRIORITY_CLASSES } from "@/lib/content";
+import { type Task, type MediaAnnotation, TASK_STATUS_LABELS, TASK_PRIORITY_CLASSES } from "@/lib/content";
+import { MediaProofingCanvas, type AnnotationInput } from "@/components/media-proofing-canvas";
 import { cn } from "@/lib/utils";
 
 // ── Stage types ──────────────────────────────────────────────────
@@ -120,6 +122,7 @@ export function PostDialog({ postId, newForClient, onClose }: Props) {
   const [activeTab, setActiveTab] = useState<FlowStage>("tema");
   const [refLinks, setRefLinks] = useState<[string, string, string]>(["", "", ""]);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [selectedMediaId, setSelectedMediaId] = useState<string | null>(null);
 
   // ── Queries ──────────────────────────────────────────────────
 
@@ -217,6 +220,34 @@ export function PostDialog({ postId, newForClient, onClose }: Props) {
     },
   });
 
+  const annotationsQuery = useQuery<MediaAnnotation[]>({
+    queryKey: ["annotations", selectedMediaId],
+    enabled: !!selectedMediaId && !isNew,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("media_annotations")
+        .select("*")
+        .eq("post_media_id", selectedMediaId!)
+        .order("created_at");
+      return (data ?? []) as MediaAnnotation[];
+    },
+  });
+
+  const allMediaIds = useMemo(() => (mediaQuery.data ?? []).map((m) => m.id), [mediaQuery.data]);
+  const annotationCountQuery = useQuery({
+    queryKey: ["annotation-count", postId],
+    enabled: !!postId && !isNew,
+    queryFn: async () => {
+      if (allMediaIds.length === 0) return { total: 0, unresolved: 0 };
+      const { data } = await supabase
+        .from("media_annotations")
+        .select("id, resolved")
+        .in("post_media_id", allMediaIds);
+      const all = data ?? [];
+      return { total: all.length, unresolved: all.filter((a) => !a.resolved).length };
+    },
+  });
+
   // ── Derived ──────────────────────────────────────────────────
 
   const stageStatusMap = useMemo(() => {
@@ -258,6 +289,12 @@ export function PostDialog({ postId, newForClient, onClose }: Props) {
     if (postTagsQuery.data) setSelectedTagIds(postTagsQuery.data);
   }, [postTagsQuery.data]);
 
+  useEffect(() => {
+    if (mediaQuery.data && mediaQuery.data.length > 0 && !selectedMediaId) {
+      setSelectedMediaId(mediaQuery.data[0].id);
+    }
+  }, [mediaQuery.data, selectedMediaId]);
+
   // ── Mutations ────────────────────────────────────────────────
 
   const invalidate = () => {
@@ -273,6 +310,50 @@ export function PostDialog({ postId, newForClient, onClose }: Props) {
       await supabase.from("post_tags").insert(selectedTagIds.map((tag_id) => ({ post_id: pid, tag_id })));
     }
     qc.invalidateQueries({ queryKey: ["post-tags", pid] });
+  };
+
+  const addAnnotation = async ({ x, y, body, timestampSeconds }: AnnotationInput) => {
+    if (!selectedMediaId) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    await supabase.from("media_annotations").insert({
+      post_media_id: selectedMediaId,
+      author_type: "team" as const,
+      author_user_id: user?.id ?? null,
+      author_name: user?.email ?? "Equipe",
+      x_position: x,
+      y_position: y,
+      body,
+      timestamp_seconds: timestampSeconds ?? null,
+    });
+    qc.invalidateQueries({ queryKey: ["annotations", selectedMediaId] });
+    qc.invalidateQueries({ queryKey: ["annotation-count", postId] });
+  };
+
+  const resolveAnnotation = async (id: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    await supabase.from("media_annotations").update({
+      resolved: true,
+      resolved_by: user?.id ?? null,
+      resolved_at: new Date().toISOString(),
+    }).eq("id", id);
+    qc.invalidateQueries({ queryKey: ["annotations", selectedMediaId] });
+    qc.invalidateQueries({ queryKey: ["annotation-count", postId] });
+  };
+
+  const reopenAnnotation = async (id: string) => {
+    await supabase.from("media_annotations").update({
+      resolved: false,
+      resolved_by: null,
+      resolved_at: null,
+    }).eq("id", id);
+    qc.invalidateQueries({ queryKey: ["annotations", selectedMediaId] });
+    qc.invalidateQueries({ queryKey: ["annotation-count", postId] });
+  };
+
+  const deleteAnnotation = async (id: string) => {
+    await supabase.from("media_annotations").delete().eq("id", id);
+    qc.invalidateQueries({ queryKey: ["annotations", selectedMediaId] });
+    qc.invalidateQueries({ queryKey: ["annotation-count", postId] });
   };
 
   const logActivity = async (action: string) => {
@@ -446,61 +527,86 @@ export function PostDialog({ postId, newForClient, onClose }: Props) {
           !isNew && "md:grid-cols-[3fr_2fr]",
         )}>
 
-          {/* ── Left (60%): media gallery — existing posts only ── */}
+          {/* ── Left (60%): proofing canvas — existing posts only ── */}
           {!isNew && (
             <div className="flex max-h-[90vh] flex-col overflow-hidden border-r bg-muted/10">
-              {/* Scrollable media area */}
-              <ScrollArea className="flex-1 p-4">
-                {(mediaQuery.data?.length ?? 0) > 0 ? (
-                  <div className={cn(
-                    "grid gap-2",
-                    (mediaQuery.data?.length ?? 0) === 1 ? "grid-cols-1" : "grid-cols-2",
-                  )}>
-                    {mediaQuery.data?.map((m) => (
-                      <div
-                        key={m.id}
-                        className="group relative aspect-square overflow-hidden rounded-lg bg-muted"
-                      >
-                        {m.url ? (
-                          m.type === "video" ? (
-                            <video src={m.url} controls className="h-full w-full object-cover" />
-                          ) : (
-                            <img src={m.url} alt="mídia" className="h-full w-full object-cover" />
-                          )
-                        ) : (
-                          <ImageOff className="absolute inset-0 m-auto h-8 w-8 text-muted-foreground" />
-                        )}
-                        <button
-                          onClick={() => deleteMedia(m)}
-                          className="absolute right-1.5 top-1.5 rounded bg-background/80 p-1 opacity-0 shadow transition group-hover:opacity-100"
-                        >
-                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                        </button>
-                      </div>
-                    ))}
+              {/* Thumbnail strip + upload + annotation counter */}
+              <div className="flex flex-shrink-0 items-center gap-1.5 overflow-x-auto border-b bg-card/60 px-2 py-1.5">
+                {mediaQuery.data?.map((m) => (
+                  <div key={m.id} className="group relative flex-shrink-0">
+                    <button
+                      onClick={() => setSelectedMediaId(m.id)}
+                      className={cn(
+                        "h-11 w-11 overflow-hidden rounded border-2 transition",
+                        selectedMediaId === m.id ? "border-primary shadow-sm" : "border-transparent hover:border-border",
+                      )}
+                    >
+                      {m.url ? (
+                        m.type === "video"
+                          ? <video src={m.url} className="h-full w-full object-cover" />
+                          : <img src={m.url} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-muted">
+                          <ImageOff className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => { deleteMedia(m); if (selectedMediaId === m.id) setSelectedMediaId(null); }}
+                      className="absolute -right-1 -top-1 hidden h-4 w-4 items-center justify-center rounded-full bg-destructive text-white group-hover:flex"
+                    >
+                      <X className="h-2.5 w-2.5" />
+                    </button>
                   </div>
-                ) : (
-                  <div className="flex h-48 flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed text-muted-foreground">
-                    <ImageOff className="h-8 w-8 opacity-30" />
-                    <p className="text-sm">Sem mídia</p>
-                  </div>
-                )}
-
-                <label className="mt-3 flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-dashed p-2.5 text-xs text-muted-foreground transition-colors hover:bg-accent/50">
-                  <Upload className="h-3.5 w-3.5" /> Adicionar mídia
+                ))}
+                <label className="flex h-11 w-11 flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded border border-dashed text-muted-foreground hover:bg-accent/50">
+                  <Upload className="h-3.5 w-3.5" />
                   <input type="file" multiple accept="image/*,video/*" className="hidden" onChange={(e) => upload(e.target.files)} />
                 </label>
-              </ScrollArea>
+                {(annotationCountQuery.data?.total ?? 0) > 0 && (
+                  <span className="ml-auto flex flex-shrink-0 items-center gap-1 text-[10px] text-muted-foreground">
+                    <Pin className="h-3 w-3" />
+                    {annotationCountQuery.data!.unresolved > 0 ? (
+                      <span className="font-semibold text-primary">{annotationCountQuery.data!.unresolved} abertos</span>
+                    ) : (
+                      <span className="text-green-600">Todos resolvidos</span>
+                    )}
+                  </span>
+                )}
+              </div>
+
+              {/* Proofing canvas */}
+              <div className="flex-1 overflow-hidden">
+                {(() => {
+                  const m = mediaQuery.data?.find((x) => x.id === selectedMediaId);
+                  if (m?.url) {
+                    return (
+                      <MediaProofingCanvas
+                        mediaId={m.id}
+                        src={m.url}
+                        type={m.type as "image" | "video"}
+                        annotations={annotationsQuery.data ?? []}
+                        onAdd={addAnnotation}
+                        onResolve={resolveAnnotation}
+                        onReopen={reopenAnnotation}
+                        onDelete={deleteAnnotation}
+                      />
+                    );
+                  }
+                  return (
+                    <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
+                      <ImageOff className="h-8 w-8 opacity-30" />
+                      <p className="text-sm">Sem mídia — faça upload acima</p>
+                    </div>
+                  );
+                })()}
+              </div>
 
               {/* Caption preview strip */}
               {form.caption && (
-                <div className="max-h-36 flex-shrink-0 overflow-auto border-t bg-card/60 p-4">
-                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Legenda
-                  </p>
-                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/80 line-clamp-5">
-                    {form.caption}
-                  </p>
+                <div className="max-h-28 flex-shrink-0 overflow-auto border-t bg-card/60 px-4 py-3">
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Legenda</p>
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/80 line-clamp-4">{form.caption}</p>
                 </div>
               )}
             </div>

@@ -32,6 +32,7 @@ import {
   ChevronDown,
   Filter,
   X,
+  Pin,
 } from "lucide-react";
 import { type Post, type Client, type Tag, STATUS_LABELS, PLATFORM_LABELS, FORMAT_TYPE_LABELS, VEICULACAO_LABELS } from "@/lib/content";
 import {
@@ -351,6 +352,33 @@ function CalendarView({
     },
   });
 
+  // ── Unresolved annotation counts per post ────────────────────────────────
+  const { data: postAnnotationCounts = {} } = useQuery<Record<string, number>>({
+    queryKey: ["cal-annotation-counts", clientId],
+    enabled: posts.length > 0,
+    staleTime: 60 * 1000,
+    queryFn: async () => {
+      const { data: mediaRows } = await supabase
+        .from("post_media")
+        .select("id, post_id")
+        .in("post_id", posts.map((p) => p.id));
+      const mediaIds = (mediaRows ?? []).map((m) => m.id);
+      if (!mediaIds.length) return {};
+      const mediaIdToPostId = Object.fromEntries((mediaRows ?? []).map((m) => [m.id, m.post_id]));
+      const { data: anns } = await supabase
+        .from("media_annotations")
+        .select("post_media_id")
+        .in("post_media_id", mediaIds)
+        .eq("resolved", false);
+      const counts: Record<string, number> = {};
+      for (const a of anns ?? []) {
+        const pid = mediaIdToPostId[a.post_media_id];
+        if (pid) counts[pid] = (counts[pid] ?? 0) + 1;
+      }
+      return counts;
+    },
+  });
+
   // ── Post → tag_ids map from embedded join ─────────────────────────────────
   const postTagsMap = useMemo(() => {
     const map: Record<string, string[]> = {};
@@ -553,6 +581,7 @@ function CalendarView({
                 covers={postCovers}
                 postTagsMap={postTagsMap}
                 allTags={clientTags}
+                annotationCounts={postAnnotationCounts}
               />
             ))}
           </div>
@@ -571,6 +600,7 @@ function CalendarView({
                   covers={postCovers}
                   postTagsMap={postTagsMap}
                   allTags={clientTags}
+                  annotationCounts={postAnnotationCounts}
                 />
               );
             })}
@@ -590,7 +620,7 @@ function CalendarView({
 }
 
 function DayCell({
-  day, dateStr, posts: dayPosts, onOpen, onNew, covers, postTagsMap, allTags,
+  day, dateStr, posts: dayPosts, onOpen, onNew, covers, postTagsMap, allTags, annotationCounts,
 }: {
   day: number | null;
   dateStr: string;
@@ -600,6 +630,7 @@ function DayCell({
   covers: Record<string, string>;
   postTagsMap: Record<string, string[]>;
   allTags: Tag[];
+  annotationCounts: Record<string, number>;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: dateStr, disabled: !day });
 
@@ -628,6 +659,7 @@ function DayCell({
                   onOpen={onOpen}
                   cover={covers[p.id]}
                   postTags={tags}
+                  annotationCount={annotationCounts[p.id] ?? 0}
                 />
               );
             })}
@@ -639,12 +671,13 @@ function DayCell({
 }
 
 function DraggablePost({
-  post, onOpen, cover, postTags,
+  post, onOpen, cover, postTags, annotationCount = 0,
 }: {
   post: Post;
   onOpen: (id: string) => void;
   cover?: string;
   postTags: Tag[];
+  annotationCount?: number;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: post.id,
@@ -670,12 +703,17 @@ function DraggablePost({
           {...attributes}
           onClick={(e) => { e.stopPropagation(); onOpen(post.id); }}
           className={cn(
-            "block w-full truncate rounded px-1 py-0.5 text-left text-[10px]",
+            "flex w-full items-center gap-1 truncate rounded px-1 py-0.5 text-left text-[10px]",
             isDragging && "opacity-30",
             post.status === "published" && "cursor-default"
           )}
         >
           <StatusBadge status={post.status} flowStage={post.flow_stage} approvalMode={post.approval_mode} />
+          {annotationCount > 0 && (
+            <span className="ml-auto flex flex-shrink-0 items-center gap-0.5 rounded-full bg-amber-100 px-1 text-[8px] font-bold text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
+              <Pin className="h-2 w-2" />{annotationCount}
+            </span>
+          )}
         </button>
       </HoverCardTrigger>
 
@@ -702,9 +740,16 @@ function DraggablePost({
                 ))}
               </div>
             )}
-            {dateLabel && (
-              <p className="text-[10px] text-muted-foreground">{dateLabel}</p>
-            )}
+            <div className="flex items-center justify-between gap-2">
+              {dateLabel && (
+                <p className="text-[10px] text-muted-foreground">{dateLabel}</p>
+              )}
+              {annotationCount > 0 && (
+                <span className="flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
+                  <Pin className="h-2.5 w-2.5" /> {annotationCount} aberto{annotationCount !== 1 ? "s" : ""}
+                </span>
+              )}
+            </div>
           </div>
         </HoverCardContent>
       )}

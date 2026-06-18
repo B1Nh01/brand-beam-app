@@ -445,6 +445,62 @@ export type Database = {
           },
         ]
       }
+      media_annotations: {
+        Row: {
+          id: string
+          post_media_id: string
+          author_type: Database["public"]["Enums"]["comment_author_type"]
+          author_user_id: string | null
+          author_name: string | null
+          x_position: number
+          y_position: number
+          timestamp_seconds: number | null
+          body: string
+          resolved: boolean
+          resolved_by: string | null
+          resolved_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          post_media_id: string
+          author_type: Database["public"]["Enums"]["comment_author_type"]
+          author_user_id?: string | null
+          author_name?: string | null
+          x_position: number
+          y_position: number
+          timestamp_seconds?: number | null
+          body: string
+          resolved?: boolean
+          resolved_by?: string | null
+          resolved_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          post_media_id?: string
+          author_type?: Database["public"]["Enums"]["comment_author_type"]
+          author_user_id?: string | null
+          author_name?: string | null
+          x_position?: number
+          y_position?: number
+          timestamp_seconds?: number | null
+          body?: string
+          resolved?: boolean
+          resolved_by?: string | null
+          resolved_at?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_annotations_post_media_id_fkey"
+            columns: ["post_media_id"]
+            isOneToOne: false
+            referencedRelation: "post_media"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       post_comments: {
         Row: {
           author_name: string | null
@@ -1030,6 +1086,33 @@ export type Database = {
       overdue_revenue_count: {
         Args: { _workspace_id: string }
         Returns: number
+      }
+      portal_add_annotation: {
+        Args: {
+          _token: string
+          _post_media_id: string
+          _author_name: string
+          _x: number
+          _y: number
+          _body: string
+          _timestamp_seconds?: number | null
+        }
+        Returns: string
+      }
+      portal_get_annotations: {
+        Args: { _token: string; _post_media_id: string }
+        Returns: {
+          id: string
+          post_media_id: string
+          author_type: string
+          author_name: string | null
+          x_position: number
+          y_position: number
+          timestamp_seconds: number | null
+          body: string
+          resolved: boolean
+          created_at: string
+        }[]
       }
       portal_add_comment: {
         Args: {

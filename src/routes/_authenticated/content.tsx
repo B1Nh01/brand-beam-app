@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { StatusBadge } from "@/components/status-badge";
 import { PostDialog } from "@/components/post-dialog";
 import { Button } from "@/components/ui/button";
-import { LayoutGrid, List, ArrowUpDown, CalendarDays, User } from "lucide-react";
+import { LayoutGrid, List, ArrowUpDown, CalendarDays, User, Pin } from "lucide-react";
 import {
   STATUS_LABELS, FORMAT_LABELS,
   type Post, type Client, type PostStatus,
@@ -107,6 +107,34 @@ function ContentBoard() {
     for (const c of data?.clients ?? []) m[c.id] = c;
     return m;
   }, [data?.clients]);
+
+  const allPostIds = useMemo(() => (data?.posts ?? []).map((p) => p.id), [data?.posts]);
+
+  const { data: annotationCounts = {} } = useQuery<Record<string, number>>({
+    queryKey: ["board-annotation-counts", allPostIds.join(",")],
+    enabled: allPostIds.length > 0,
+    staleTime: 60 * 1000,
+    queryFn: async () => {
+      const { data: mediaRows } = await supabase
+        .from("post_media")
+        .select("id, post_id")
+        .in("post_id", allPostIds);
+      const mediaIds = (mediaRows ?? []).map((m) => m.id);
+      if (!mediaIds.length) return {};
+      const mediaIdToPostId = Object.fromEntries((mediaRows ?? []).map((m) => [m.id, m.post_id]));
+      const { data: anns } = await supabase
+        .from("media_annotations")
+        .select("post_media_id")
+        .in("post_media_id", mediaIds)
+        .eq("resolved", false);
+      const counts: Record<string, number> = {};
+      for (const a of anns ?? []) {
+        const pid = mediaIdToPostId[a.post_media_id];
+        if (pid) counts[pid] = (counts[pid] ?? 0) + 1;
+      }
+      return counts;
+    },
+  });
 
   const filtered = useMemo(() => {
     return (data?.posts ?? []).filter((p) => {
@@ -360,6 +388,7 @@ function ContentBoard() {
                         client={clientMap[p.client_id]}
                         groupBy={groupBy}
                         onClick={() => setOpenPost(p.id)}
+                        annotationCount={annotationCounts[p.id] ?? 0}
                       />
                     ))
                   )}
@@ -388,11 +417,13 @@ function KanbanCard({
   client,
   groupBy,
   onClick,
+  annotationCount = 0,
 }: {
   post: Post;
   client: Client | undefined;
   groupBy: GroupBy;
   onClick: () => void;
+  annotationCount?: number;
 }) {
   const brand = client?.brand_color ?? "#6b7280";
 
@@ -418,12 +449,19 @@ function KanbanCard({
             <span className="text-[10px] text-muted-foreground">{FORMAT_LABELS[p.format]}</span>
           )}
         </div>
-        {p.scheduled_date && groupBy !== "date" && (
-          <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-            <CalendarDays className="h-3 w-3" />
-            {fmtDate(p.scheduled_date)}
-          </div>
-        )}
+        <div className="flex items-center justify-between gap-2">
+          {p.scheduled_date && groupBy !== "date" ? (
+            <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+              <CalendarDays className="h-3 w-3" />
+              {fmtDate(p.scheduled_date)}
+            </div>
+          ) : <span />}
+          {annotationCount > 0 && (
+            <span className="flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
+              <Pin className="h-2.5 w-2.5" /> {annotationCount}
+            </span>
+          )}
+        </div>
       </div>
     </button>
   );

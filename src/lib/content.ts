@@ -61,6 +61,7 @@ export type Post = Database["public"]["Tables"]["posts"]["Row"];
 export type Tag = Database["public"]["Tables"]["tags"]["Row"];
 export type PostMedia = Database["public"]["Tables"]["post_media"]["Row"];
 export type PostComment = Database["public"]["Tables"]["post_comments"]["Row"];
+export type MediaAnnotation = Database["public"]["Tables"]["media_annotations"]["Row"];
 export type ActivityLog = Database["public"]["Tables"]["activity_log"]["Row"];
 export type PostStatus = Database["public"]["Enums"]["post_status"];
 export type FlowStage = Database["public"]["Enums"]["flow_stage"];
