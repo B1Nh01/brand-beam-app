@@ -17,6 +17,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
+import {
   Plus,
   ChevronLeft,
   ChevronRight,
@@ -314,6 +319,38 @@ function CalendarView({
     },
   });
 
+  // ── Cover thumbnails for hover preview ───────────────────────────────────
+  const { data: postCovers = {} } = useQuery<Record<string, string>>({
+    queryKey: ["cal-covers", clientId],
+    enabled: posts.length > 0,
+    staleTime: 55 * 60 * 1000,
+    queryFn: async () => {
+      const { data: mediaRows } = await supabase
+        .from("post_media")
+        .select("post_id,storage_path")
+        .in("post_id", posts.map((p) => p.id))
+        .order("sort_order");
+
+      const firstPerPost: Record<string, string> = {};
+      for (const m of mediaRows ?? []) {
+        if (!firstPerPost[m.post_id]) firstPerPost[m.post_id] = m.storage_path;
+      }
+
+      const entries = Object.entries(firstPerPost);
+      if (!entries.length) return {};
+
+      const { data: signed } = await supabase.storage
+        .from("post-media")
+        .createSignedUrls(entries.map(([, path]) => path), 3600);
+
+      const map: Record<string, string> = {};
+      signed?.forEach((s, i) => {
+        if (s?.signedUrl) map[entries[i][0]] = s.signedUrl;
+      });
+      return map;
+    },
+  });
+
   // ── Post → tag_ids map from embedded join ─────────────────────────────────
   const postTagsMap = useMemo(() => {
     const map: Record<string, string[]> = {};
@@ -513,6 +550,9 @@ function CalendarView({
                 posts={d ? filteredPosts.filter((p) => p.scheduled_date === iso(d)) : []}
                 onOpen={onOpen}
                 onNew={onNew}
+                covers={postCovers}
+                postTagsMap={postTagsMap}
+                allTags={clientTags}
               />
             ))}
           </div>
@@ -528,6 +568,9 @@ function CalendarView({
                   posts={filteredPosts.filter((p) => p.scheduled_date === dateStr)}
                   onOpen={onOpen}
                   onNew={onNew}
+                  covers={postCovers}
+                  postTagsMap={postTagsMap}
+                  allTags={clientTags}
                 />
               );
             })}
@@ -546,7 +589,18 @@ function CalendarView({
   );
 }
 
-function DayCell({ day, dateStr, posts: dayPosts, onOpen, onNew }: { day: number | null; dateStr: string; posts: Post[]; onOpen: (id: string) => void; onNew: (date: string) => void }) {
+function DayCell({
+  day, dateStr, posts: dayPosts, onOpen, onNew, covers, postTagsMap, allTags,
+}: {
+  day: number | null;
+  dateStr: string;
+  posts: Post[];
+  onOpen: (id: string) => void;
+  onNew: (date: string) => void;
+  covers: Record<string, string>;
+  postTagsMap: Record<string, string[]>;
+  allTags: Tag[];
+}) {
   const { setNodeRef, isOver } = useDroppable({ id: dateStr, disabled: !day });
 
   return (
@@ -564,9 +618,19 @@ function DayCell({ day, dateStr, posts: dayPosts, onOpen, onNew }: { day: number
             <button onClick={() => onNew(dateStr)} className="opacity-0 transition group-hover:opacity-100"><Plus className="h-3 w-3" /></button>
           </div>
           <div className="mt-1 space-y-1">
-            {dayPosts.map((p) => (
-              <DraggablePost key={p.id} post={p} onOpen={onOpen} />
-            ))}
+            {dayPosts.map((p) => {
+              const tagIds = postTagsMap[p.id] ?? [];
+              const tags = allTags.filter((t) => tagIds.includes(t.id));
+              return (
+                <DraggablePost
+                  key={p.id}
+                  post={p}
+                  onOpen={onOpen}
+                  cover={covers[p.id]}
+                  postTags={tags}
+                />
+              );
+            })}
           </div>
         </>
       )}
@@ -574,35 +638,77 @@ function DayCell({ day, dateStr, posts: dayPosts, onOpen, onNew }: { day: number
   );
 }
 
-function DraggablePost({ post, onOpen }: { post: Post; onOpen: (id: string) => void }) {
+function DraggablePost({
+  post, onOpen, cover, postTags,
+}: {
+  post: Post;
+  onOpen: (id: string) => void;
+  cover?: string;
+  postTags: Tag[];
+}) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: post.id,
     disabled: post.status === "published",
     data: { post },
   });
 
-  const style = transform
-    ? { transform: CSS.Translate.toString(transform) }
-    : undefined;
+  const style = transform ? { transform: CSS.Translate.toString(transform) } : undefined;
+
+  const dateLabel = post.scheduled_date
+    ? new Date(post.scheduled_date + "T00:00:00").toLocaleDateString("pt-BR", {
+        day: "numeric", month: "short",
+      })
+    : null;
 
   return (
-    <button
-      ref={setNodeRef}
-      style={style}
-      {...listeners}
-      {...attributes}
-      onClick={(e) => {
-        e.stopPropagation();
-        onOpen(post.id);
-      }}
-      className={cn(
-        "block w-full truncate rounded px-1 py-0.5 text-left text-[10px]",
-        isDragging && "opacity-30",
-        post.status === "published" && "cursor-default"
+    <HoverCard openDelay={300} closeDelay={80}>
+      <HoverCardTrigger asChild>
+        <button
+          ref={setNodeRef}
+          style={style}
+          {...listeners}
+          {...attributes}
+          onClick={(e) => { e.stopPropagation(); onOpen(post.id); }}
+          className={cn(
+            "block w-full truncate rounded px-1 py-0.5 text-left text-[10px]",
+            isDragging && "opacity-30",
+            post.status === "published" && "cursor-default"
+          )}
+        >
+          <StatusBadge status={post.status} flowStage={post.flow_stage} approvalMode={post.approval_mode} />
+        </button>
+      </HoverCardTrigger>
+
+      {!isDragging && (
+        <HoverCardContent side="right" align="start" sideOffset={6} className="w-52 p-0 overflow-hidden">
+          {cover && (
+            <div className="aspect-video w-full overflow-hidden bg-muted">
+              <img src={cover} alt={post.title} className="h-full w-full object-cover" />
+            </div>
+          )}
+          <div className="p-2.5 space-y-1.5">
+            <p className="truncate text-sm font-semibold leading-tight">{post.title}</p>
+            <StatusBadge status={post.status} flowStage={post.flow_stage} approvalMode={post.approval_mode} />
+            {postTags.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {postTags.map((t) => (
+                  <span
+                    key={t.id}
+                    className="rounded-full px-1.5 py-0.5 text-[10px] font-medium text-white"
+                    style={{ backgroundColor: t.color }}
+                  >
+                    {t.name}
+                  </span>
+                ))}
+              </div>
+            )}
+            {dateLabel && (
+              <p className="text-[10px] text-muted-foreground">{dateLabel}</p>
+            )}
+          </div>
+        </HoverCardContent>
       )}
-    >
-      <StatusBadge status={post.status} flowStage={post.flow_stage} approvalMode={post.approval_mode} />
-    </button>
+    </HoverCard>
   );
 }
 
