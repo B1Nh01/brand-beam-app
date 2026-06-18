@@ -46,9 +46,6 @@ import {
   ChevronDown,
   ChevronUp,
   Plus,
-  Heart,
-  MessageCircle,
-  Share2,
   Link as LinkIcon,
   Tag as TagIcon,
   X,
@@ -101,12 +98,6 @@ const STAGE_DOT_COLOR: Record<StageStatus, string> = {
   adjustment_requested: "#ef4444",
   approved: "#22c55e",
 };
-
-function seededInt(seed: string, min: number, max: number) {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
-  return min + (Math.abs(h) % (max - min));
-}
 
 // ── Component ────────────────────────────────────────────────────
 
@@ -236,11 +227,6 @@ export function PostDialog({ postId, newForClient, onClose }: Props) {
 
   const getStageStatus = (stage: FlowStage): StageStatus => stageStatusMap[stage] ?? "draft";
 
-  const firstMedia = mediaQuery.data?.find((m) => m.type === "image" && m.url);
-  const previewLikes = postId ? seededInt(postId + "l", 150, 9999) : 0;
-  const clientHandle = clientQuery.data?.instagram_handle
-    ? `@${clientQuery.data.instagram_handle}`
-    : clientQuery.data?.name ?? "cliente";
 
   // ── Effects ──────────────────────────────────────────────────
 
@@ -454,10 +440,74 @@ export function PostDialog({ postId, newForClient, onClose }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-5xl p-0">
-        <div className="grid max-h-[88vh] grid-cols-1 md:grid-cols-[1.5fr_1fr]">
-          {/* ── Left: form + tabs ── */}
-          <ScrollArea className="max-h-[88vh] border-r p-5">
+      <DialogContent className="max-w-6xl p-0">
+        <div className={cn(
+          "grid max-h-[90vh] grid-cols-1",
+          !isNew && "md:grid-cols-[3fr_2fr]",
+        )}>
+
+          {/* ── Left (60%): media gallery — existing posts only ── */}
+          {!isNew && (
+            <div className="flex max-h-[90vh] flex-col overflow-hidden border-r bg-muted/10">
+              {/* Scrollable media area */}
+              <ScrollArea className="flex-1 p-4">
+                {(mediaQuery.data?.length ?? 0) > 0 ? (
+                  <div className={cn(
+                    "grid gap-2",
+                    (mediaQuery.data?.length ?? 0) === 1 ? "grid-cols-1" : "grid-cols-2",
+                  )}>
+                    {mediaQuery.data?.map((m) => (
+                      <div
+                        key={m.id}
+                        className="group relative aspect-square overflow-hidden rounded-lg bg-muted"
+                      >
+                        {m.url ? (
+                          m.type === "video" ? (
+                            <video src={m.url} controls className="h-full w-full object-cover" />
+                          ) : (
+                            <img src={m.url} alt="mídia" className="h-full w-full object-cover" />
+                          )
+                        ) : (
+                          <ImageOff className="absolute inset-0 m-auto h-8 w-8 text-muted-foreground" />
+                        )}
+                        <button
+                          onClick={() => deleteMedia(m)}
+                          className="absolute right-1.5 top-1.5 rounded bg-background/80 p-1 opacity-0 shadow transition group-hover:opacity-100"
+                        >
+                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex h-48 flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed text-muted-foreground">
+                    <ImageOff className="h-8 w-8 opacity-30" />
+                    <p className="text-sm">Sem mídia</p>
+                  </div>
+                )}
+
+                <label className="mt-3 flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-dashed p-2.5 text-xs text-muted-foreground transition-colors hover:bg-accent/50">
+                  <Upload className="h-3.5 w-3.5" /> Adicionar mídia
+                  <input type="file" multiple accept="image/*,video/*" className="hidden" onChange={(e) => upload(e.target.files)} />
+                </label>
+              </ScrollArea>
+
+              {/* Caption preview strip */}
+              {form.caption && (
+                <div className="max-h-36 flex-shrink-0 overflow-auto border-t bg-card/60 p-4">
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Legenda
+                  </p>
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/80 line-clamp-5">
+                    {form.caption}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Right (40%): form + tabs + chat + tasks ── */}
+          <ScrollArea className="max-h-[90vh] p-5">
             <DialogHeader className="mb-3">
               <DialogTitle className="flex flex-wrap items-center gap-2">
                 {isNew ? "Novo post" : (form.title || "Editar post")}
@@ -475,55 +525,19 @@ export function PostDialog({ postId, newForClient, onClose }: Props) {
             <div className="mb-4 space-y-3">
               <div className="space-y-1.5">
                 <Label>Título</Label>
-                <Input
-                  value={form.title ?? ""}
-                  onChange={(e) => setForm({ ...form, title: e.target.value })}
-                />
+                <Input value={form.title ?? ""} onChange={(e) => setForm({ ...form, title: e.target.value })} />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <SelectField
-                  label="Formato"
-                  value={form.format}
-                  options={FORMAT_LABELS}
-                  onChange={(v) => setForm({ ...form, format: v as Post["format"] })}
-                />
-                <SelectField
-                  label="Plataforma"
-                  value={form.platform}
-                  options={PLATFORM_LABELS}
-                  onChange={(v) => setForm({ ...form, platform: v as Post["platform"] })}
-                />
-                <SelectField
-                  label="Local (Feed/Stories)"
-                  value={form.format_type ?? undefined}
-                  options={FORMAT_TYPE_LABELS}
-                  onChange={(v) => setForm({ ...form, format_type: v || null })}
-                  placeholder="Não definido"
-                />
-                <SelectField
-                  label="Veiculação"
-                  value={form.veiculacao ?? undefined}
-                  options={VEICULACAO_LABELS}
-                  onChange={(v) => setForm({ ...form, veiculacao: v || null })}
-                  placeholder="Não definido"
-                />
-                <SelectField
-                  label="Modo de aprovação"
-                  value={form.approval_mode}
-                  options={APPROVAL_LABELS}
-                  onChange={(v) => setForm({ ...form, approval_mode: v as Post["approval_mode"] })}
-                />
+              <div className="grid grid-cols-2 gap-2.5">
+                <SelectField label="Formato" value={form.format} options={FORMAT_LABELS} onChange={(v) => setForm({ ...form, format: v as Post["format"] })} />
+                <SelectField label="Plataforma" value={form.platform} options={PLATFORM_LABELS} onChange={(v) => setForm({ ...form, platform: v as Post["platform"] })} />
+                <SelectField label="Local" value={form.format_type ?? undefined} options={FORMAT_TYPE_LABELS} onChange={(v) => setForm({ ...form, format_type: v || null })} placeholder="Feed/Stories" />
+                <SelectField label="Veiculação" value={form.veiculacao ?? undefined} options={VEICULACAO_LABELS} onChange={(v) => setForm({ ...form, veiculacao: v || null })} placeholder="Vídeo/Post" />
+                <SelectField label="Aprovação" value={form.approval_mode} options={APPROVAL_LABELS} onChange={(v) => setForm({ ...form, approval_mode: v as Post["approval_mode"] })} />
                 <div className="space-y-1.5">
                   <Label>Data</Label>
-                  <Input
-                    type="date"
-                    value={form.scheduled_date ?? ""}
-                    onChange={(e) => setForm({ ...form, scheduled_date: e.target.value })}
-                  />
+                  <Input type="date" value={form.scheduled_date ?? ""} onChange={(e) => setForm({ ...form, scheduled_date: e.target.value })} />
                 </div>
               </div>
-
-              {/* Tags */}
               <TagPicker
                 tags={tagsQuery.data ?? []}
                 selectedIds={selectedTagIds}
@@ -538,11 +552,8 @@ export function PostDialog({ postId, newForClient, onClose }: Props) {
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as FlowStage)}>
               <TabsList className="mb-3 grid w-full grid-cols-4">
                 {FLOW_ORDER.map((stage) => (
-                  <TabsTrigger key={stage} value={stage} className="gap-1.5 text-xs">
-                    <span
-                      className="h-2 w-2 flex-shrink-0 rounded-full"
-                      style={{ backgroundColor: STAGE_DOT_COLOR[getStageStatus(stage)] }}
-                    />
+                  <TabsTrigger key={stage} value={stage} className="gap-1 text-xs">
+                    <span className="h-2 w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: STAGE_DOT_COLOR[getStageStatus(stage)] }} />
                     {FLOW_LABELS[stage]}
                   </TabsTrigger>
                 ))}
@@ -550,133 +561,48 @@ export function PostDialog({ postId, newForClient, onClose }: Props) {
 
               {/* Tema */}
               <TabsContent value="tema" className="space-y-3">
-                <StageStatusRow
-                  stage="tema"
-                  status={getStageStatus("tema")}
-                  disabled={isNew}
-                  onChange={updateStageStatus}
-                />
+                <StageStatusRow stage="tema" status={getStageStatus("tema")} disabled={isNew} onChange={updateStageStatus} />
                 <div className="space-y-1.5">
                   <Label>Ideia / Briefing</Label>
-                  <Textarea
-                    rows={4}
-                    value={form.idea ?? ""}
-                    onChange={(e) => setForm({ ...form, idea: e.target.value })}
-                    placeholder="Descreva a ideia do post..."
-                  />
+                  <Textarea rows={4} value={form.idea ?? ""} onChange={(e) => setForm({ ...form, idea: e.target.value })} placeholder="Descreva a ideia do post..." />
                 </div>
                 <div className="space-y-2">
-                  <Label className="flex items-center gap-1.5">
-                    <LinkIcon className="h-3.5 w-3.5" />
-                    Referências visuais
-                  </Label>
+                  <Label className="flex items-center gap-1.5"><LinkIcon className="h-3.5 w-3.5" /> Referências visuais</Label>
                   {refLinks.map((link, i) => (
-                    <Input
-                      key={i}
-                      value={link}
-                      onChange={(e) =>
-                        setRefLinks((prev) => {
-                          const n = [...prev] as [string, string, string];
-                          n[i] = e.target.value;
-                          return n;
-                        })
-                      }
-                      placeholder={`Link de referência ${i + 1}`}
-                      type="url"
-                    />
+                    <Input key={i} value={link} onChange={(e) => setRefLinks((prev) => { const n = [...prev] as [string, string, string]; n[i] = e.target.value; return n; })} placeholder={`Link de referência ${i + 1}`} type="url" />
                   ))}
                 </div>
               </TabsContent>
 
               {/* Conteúdo */}
               <TabsContent value="conteudo" className="space-y-3">
-                <StageStatusRow
-                  stage="conteudo"
-                  status={getStageStatus("conteudo")}
-                  disabled={isNew}
-                  onChange={updateStageStatus}
-                />
+                <StageStatusRow stage="conteudo" status={getStageStatus("conteudo")} disabled={isNew} onChange={updateStageStatus} />
                 <div className="space-y-1.5">
                   <Label>Copy / Roteiro</Label>
-                  <Textarea
-                    rows={9}
-                    value={form.copy ?? ""}
-                    onChange={(e) => setForm({ ...form, copy: e.target.value })}
-                    placeholder="Escreva o conteúdo do post..."
-                  />
+                  <Textarea rows={8} value={form.copy ?? ""} onChange={(e) => setForm({ ...form, copy: e.target.value })} placeholder="Escreva o conteúdo do post..." />
                 </div>
               </TabsContent>
 
-              {/* Mídia */}
+              {/* Mídia — upload managed in left panel */}
               <TabsContent value="midia" className="space-y-3">
-                <StageStatusRow
-                  stage="midia"
-                  status={getStageStatus("midia")}
-                  disabled={isNew}
-                  onChange={updateStageStatus}
-                />
-                {!isNew ? (
-                  <div className="space-y-1.5">
-                    <Label>Arquivos de mídia</Label>
-                    <div className="flex flex-wrap gap-2">
-                      {mediaQuery.data?.map((m) => (
-                        <div
-                          key={m.id}
-                          className="group relative h-24 w-24 overflow-hidden rounded-md border bg-muted"
-                        >
-                          {m.url ? (
-                            m.type === "video" ? (
-                              <video src={m.url} className="h-full w-full object-cover" />
-                            ) : (
-                              <img src={m.url} alt="mídia" className="h-full w-full object-cover" />
-                            )
-                          ) : (
-                            <ImageOff className="m-auto mt-8 h-6 w-6 text-muted-foreground" />
-                          )}
-                          <button
-                            onClick={() => deleteMedia(m)}
-                            className="absolute right-1 top-1 rounded bg-background/80 p-1 opacity-0 transition group-hover:opacity-100"
-                          >
-                            <Trash2 className="h-3 w-3 text-destructive" />
-                          </button>
-                        </div>
-                      ))}
-                      <label className="flex h-24 w-24 cursor-pointer flex-col items-center justify-center gap-1 rounded-md border border-dashed text-xs text-muted-foreground hover:bg-accent">
-                        <Upload className="h-5 w-5" />
-                        Enviar
-                        <input
-                          type="file"
-                          multiple
-                          accept="image/*,video/*"
-                          className="hidden"
-                          onChange={(e) => upload(e.target.files)}
-                        />
-                      </label>
-                    </div>
-                  </div>
-                ) : (
+                <StageStatusRow stage="midia" status={getStageStatus("midia")} disabled={isNew} onChange={updateStageStatus} />
+                {isNew ? (
                   <p className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
                     Salve o post primeiro para adicionar mídias.
+                  </p>
+                ) : (
+                  <p className="rounded-lg bg-muted/40 p-3 text-center text-xs text-muted-foreground">
+                    Faça upload e visualize as mídias no painel à esquerda.
                   </p>
                 )}
               </TabsContent>
 
               {/* Legenda */}
               <TabsContent value="legenda" className="space-y-3">
-                <StageStatusRow
-                  stage="legenda"
-                  status={getStageStatus("legenda")}
-                  disabled={isNew}
-                  onChange={updateStageStatus}
-                />
+                <StageStatusRow stage="legenda" status={getStageStatus("legenda")} disabled={isNew} onChange={updateStageStatus} />
                 <div className="space-y-1.5">
                   <Label>Legenda</Label>
-                  <Textarea
-                    rows={7}
-                    value={form.caption ?? ""}
-                    onChange={(e) => setForm({ ...form, caption: e.target.value })}
-                    placeholder="Escreva a legenda final do post..."
-                  />
+                  <Textarea rows={7} value={form.caption ?? ""} onChange={(e) => setForm({ ...form, caption: e.target.value })} placeholder="Escreva a legenda final do post..." />
                 </div>
               </TabsContent>
             </Tabs>
@@ -685,207 +611,84 @@ export function PostDialog({ postId, newForClient, onClose }: Props) {
             <div className="mt-4 flex flex-wrap gap-2 border-t pt-4">
               <Button onClick={save}>{isNew ? "Criar" : "Salvar"}</Button>
               {!isNew && form.status === "draft" && (
-                <Button variant="secondary" onClick={sendForApproval}>
-                  Enviar para aprovação
-                </Button>
+                <Button variant="secondary" onClick={sendForApproval}>Enviar para aprovação</Button>
               )}
               {!isNew && form.status === "approved" && (
-                <Button variant="secondary" onClick={() => setStatus("scheduled")}>
-                  Marcar como agendado
-                </Button>
+                <Button variant="secondary" onClick={() => setStatus("scheduled")}>Marcar como agendado</Button>
               )}
               {!isNew && form.status === "scheduled" && (
-                <Button variant="secondary" onClick={() => setStatus("published")}>
-                  Marcar como publicado
-                </Button>
+                <Button variant="secondary" onClick={() => setStatus("published")}>Marcar como publicado</Button>
               )}
             </div>
-          </ScrollArea>
 
-          {/* ── Right: preview + tasks + chat ── */}
-          {!isNew && (
-            <div className="flex max-h-[88vh] flex-col overflow-hidden">
-              {/* Instagram preview */}
-              <div className="flex-shrink-0 border-b bg-muted/20 p-3">
-                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Preview
-                </p>
-                <div className="mx-auto w-44 overflow-hidden rounded-2xl border-2 border-border bg-white shadow-md">
-                  {/* Header */}
-                  <div className="flex items-center gap-1.5 bg-white px-2 py-1.5">
-                    <span
-                      className="h-5 w-5 flex-shrink-0 rounded-full"
-                      style={{
-                        background:
-                          "linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888)",
-                      }}
-                    />
-                    <span className="flex-1 truncate text-[9px] font-semibold text-gray-900">
-                      {clientHandle}
-                    </span>
-                    <span className="text-[9px] text-gray-400">•••</span>
-                  </div>
-                  {/* Media */}
-                  <div className="aspect-square bg-gray-100">
-                    {firstMedia?.url ? (
-                      <img
-                        src={firstMedia.url}
-                        alt="preview"
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center">
-                        <ImageOff className="h-5 w-5 text-gray-300" />
-                      </div>
-                    )}
-                  </div>
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 bg-white px-2 pt-1.5">
-                    <Heart className="h-3 w-3 text-gray-800" />
-                    <MessageCircle className="h-3 w-3 text-gray-800" />
-                    <Share2 className="h-3 w-3 text-gray-800" />
-                  </div>
-                  {/* Likes */}
-                  <p className="bg-white px-2 pt-0.5 text-[8px] font-semibold text-gray-900">
-                    {previewLikes.toLocaleString("pt-BR")} curtidas
-                  </p>
-                  {/* Caption */}
-                  {form.caption && (
-                    <p className="bg-white px-2 pb-2 text-[7px] leading-tight text-gray-800 line-clamp-2">
-                      <span className="font-semibold">{clientHandle}</span>{" "}
-                      {form.caption}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Tasks */}
-              <Collapsible open={tasksOpen} onOpenChange={setTasksOpen}>
-                <div className="flex items-center justify-between border-b px-3 py-2.5">
+            {/* Tasks */}
+            {!isNew && (
+              <Collapsible open={tasksOpen} onOpenChange={setTasksOpen} className="mt-3">
+                <div className="flex items-center justify-between border-t pt-3">
                   <CollapsibleTrigger asChild>
-                    <button className="flex flex-1 items-center gap-2 text-left text-sm font-semibold transition-colors hover:text-primary">
+                    <button className="flex flex-1 items-center gap-2 text-left text-sm font-semibold hover:text-primary transition-colors">
                       <ListChecks className="h-4 w-4 shrink-0" />
-                      Tarefas vinculadas
+                      Tarefas
                       {(linkedTasksQuery.data?.length ?? 0) > 0 && (
                         <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-muted px-1 text-[10px] font-bold">
                           {linkedTasksQuery.data!.length}
                         </span>
                       )}
-                      {tasksOpen ? (
-                        <ChevronUp className="ml-auto h-3 w-3" />
-                      ) : (
-                        <ChevronDown className="ml-auto h-3 w-3" />
-                      )}
+                      {tasksOpen ? <ChevronUp className="ml-auto h-3 w-3" /> : <ChevronDown className="ml-auto h-3 w-3" />}
                     </button>
                   </CollapsibleTrigger>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="ml-1 h-6 w-6 shrink-0"
-                    onClick={() =>
-                      setNewTaskValues({ post_id: postId!, client_id: form.client_id ?? undefined })
-                    }
-                  >
+                  <Button size="icon" variant="ghost" className="ml-1 h-6 w-6 shrink-0" onClick={() => setNewTaskValues({ post_id: postId!, client_id: form.client_id ?? undefined })}>
                     <Plus className="h-3 w-3" />
                   </Button>
                 </div>
-                <CollapsibleContent className="border-b">
-                  <div className="max-h-40 space-y-1 overflow-y-auto p-2">
-                    {linkedTasksQuery.data?.length === 0 && (
-                      <p className="px-2 py-3 text-xs text-muted-foreground">
-                        Nenhuma tarefa vinculada.
-                      </p>
-                    )}
-                    {linkedTasksQuery.data?.map((task) => (
-                      <button
-                        key={task.id}
-                        onClick={() => setEditTaskId(task.id)}
-                        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:bg-accent"
-                      >
-                        <span
-                          className={cn(
-                            "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold",
-                            TASK_PRIORITY_CLASSES[task.priority],
-                          )}
-                        >
-                          {TASK_STATUS_LABELS[task.status]}
-                        </span>
-                        <span className="flex-1 truncate">{task.title}</span>
-                      </button>
-                    ))}
-                    <button
-                      onClick={() =>
-                        setNewTaskValues({ post_id: postId!, client_id: form.client_id ?? undefined })
-                      }
-                      className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                    >
-                      <Plus className="h-3 w-3" />
-                      Criar tarefa para este post
+                <CollapsibleContent className="mt-1.5 space-y-1">
+                  {(linkedTasksQuery.data?.length ?? 0) === 0 && (
+                    <p className="px-2 py-2 text-xs text-muted-foreground">Nenhuma tarefa vinculada.</p>
+                  )}
+                  {linkedTasksQuery.data?.map((task) => (
+                    <button key={task.id} onClick={() => setEditTaskId(task.id)} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-accent">
+                      <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold", TASK_PRIORITY_CLASSES[task.priority])}>
+                        {TASK_STATUS_LABELS[task.status]}
+                      </span>
+                      <span className="flex-1 truncate">{task.title}</span>
                     </button>
-                  </div>
+                  ))}
                 </CollapsibleContent>
               </Collapsible>
+            )}
 
-              {/* Chat */}
-              <div className="border-b px-3 py-2">
+            {/* Chat */}
+            {!isNew && (
+              <div className="mt-3 space-y-2 border-t pt-3">
                 <h3 className="text-sm font-semibold">Chat do post</h3>
-              </div>
-              <ScrollArea className="flex-1 p-3">
-                <div className="space-y-2">
+                <div className="max-h-40 space-y-2 overflow-y-auto">
                   {commentsQuery.data?.length === 0 && (
-                    <p className="text-sm text-muted-foreground">Sem mensagens ainda.</p>
+                    <p className="text-xs text-muted-foreground">Sem mensagens ainda.</p>
                   )}
                   {commentsQuery.data?.map((c) => (
                     <div key={c.id} className={c.author_type === "team" ? "ml-4" : "mr-4"}>
-                      <div
-                        className={`rounded-lg p-2 text-sm ${
-                          c.author_type === "team" ? "bg-primary/10" : "bg-muted"
-                        }`}
-                      >
-                        <p className="mb-0.5 text-xs font-semibold">
-                          {c.author_type === "team" ? "Equipe" : c.author_name}
-                        </p>
+                      <div className={cn("rounded-lg p-2 text-sm", c.author_type === "team" ? "bg-primary/10" : "bg-muted")}>
+                        <p className="mb-0.5 text-xs font-semibold">{c.author_type === "team" ? "Equipe" : c.author_name}</p>
                         {c.body}
                       </div>
                     </div>
                   ))}
                 </div>
-              </ScrollArea>
-              <div className="flex gap-2 border-t p-3">
-                <Input
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                  placeholder="Escreva uma mensagem"
-                  onKeyDown={(e) => e.key === "Enter" && addComment()}
-                />
-                <Button size="icon" onClick={addComment}>
-                  <Send className="h-4 w-4" />
-                </Button>
+                <div className="flex gap-2">
+                  <Input value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Escreva uma mensagem" onKeyDown={(e) => e.key === "Enter" && addComment()} />
+                  <Button size="icon" onClick={addComment}><Send className="h-4 w-4" /></Button>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </ScrollArea>
         </div>
 
         {/* Task sub-dialogs */}
         {newTaskValues && (
-          <TaskDialog
-            initialValues={newTaskValues}
-            onClose={() => {
-              setNewTaskValues(null);
-              qc.invalidateQueries({ queryKey: ["tasks-by-post", postId] });
-              qc.invalidateQueries({ queryKey: ["tasks"] });
-            }}
-          />
+          <TaskDialog initialValues={newTaskValues} onClose={() => { setNewTaskValues(null); qc.invalidateQueries({ queryKey: ["tasks-by-post", postId] }); qc.invalidateQueries({ queryKey: ["tasks"] }); }} />
         )}
         {editTaskId && (
-          <TaskDialog
-            taskId={editTaskId}
-            onClose={() => {
-              setEditTaskId(null);
-              qc.invalidateQueries({ queryKey: ["tasks-by-post", postId] });
-              qc.invalidateQueries({ queryKey: ["tasks"] });
-            }}
-          />
+          <TaskDialog taskId={editTaskId} onClose={() => { setEditTaskId(null); qc.invalidateQueries({ queryKey: ["tasks-by-post", postId] }); qc.invalidateQueries({ queryKey: ["tasks"] }); }} />
         )}
       </DialogContent>
     </Dialog>
