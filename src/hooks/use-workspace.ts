@@ -14,7 +14,7 @@ export function useWorkspace() {
         .order("created_at", { ascending: true })
         .limit(1)
         .maybeSingle();
-      if (error) throw error;
+      if (error) { console.error("[useWorkspace]", error); return null; }
       return data;
     },
   });

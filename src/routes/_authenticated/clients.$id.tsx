@@ -33,8 +33,11 @@ import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
+import { RouteError } from "@/components/route-error";
+
 export const Route = createFileRoute("/_authenticated/clients/$id")({
   component: ClientSpace,
+  errorComponent: ({ error, reset }) => <RouteError error={error as Error} reset={reset} />,
 });
 
 function ClientSpace() {
@@ -82,7 +85,7 @@ function ClientSpace() {
           <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
             <div className="flex min-w-0 items-end gap-3">
               <span className="-mt-8 flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border-4 border-card text-lg font-bold text-primary-foreground" style={{ backgroundColor: brand }}>
-                {avatar ? <img src={avatar} alt="" className="h-full w-full object-cover" /> : (client?.name.charAt(0) ?? "?")}
+                {avatar ? <img src={avatar} alt="" className="h-full w-full object-cover" /> : (client?.name?.charAt(0) ?? "?")}
               </span>
               <div className="min-w-0 pb-0.5">
                 <h1 className="truncate text-xl font-extrabold tracking-tight sm:text-2xl">{client?.name}</h1>
@@ -526,9 +529,19 @@ function FeedTileContent({ post, cover, dragging }: { post: Post; cover?: string
   );
 }
 
+/** Stable pseudo-random number seeded from a string (deterministic per post). */
+function seededInt(seed: string, min: number, max: number) {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
+  return min + (Math.abs(h) % (max - min));
+}
+
 function SortableTile({ post, cover, onOpen }: { post: Post; cover?: string; onOpen: (id: string) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: post.id });
   const [hovered, setHovered] = useState(false);
+
+  const likes    = seededInt(post.id, 100, 2000);
+  const comments = seededInt(post.id + "c", 5, 120);
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -548,16 +561,13 @@ function SortableTile({ post, cover, onOpen }: { post: Post; cover?: string; onO
       className="relative touch-none block w-full"
     >
       <FeedTileContent post={post} cover={cover} />
-      {/* Hover overlay */}
       {hovered && post.status !== "draft" && (
         <div className="absolute inset-0 flex items-center justify-center gap-3 bg-black/40 text-white">
           <span className="flex items-center gap-1 text-xs font-semibold drop-shadow">
-            <Heart className="h-4 w-4 fill-white" />
-            {Math.floor(Math.random() * 900 + 100)}
+            <Heart className="h-4 w-4 fill-white" /> {likes}
           </span>
           <span className="flex items-center gap-1 text-xs font-semibold drop-shadow">
-            <MessageCircle className="h-4 w-4 fill-white" />
-            {Math.floor(Math.random() * 90 + 10)}
+            <MessageCircle className="h-4 w-4 fill-white" /> {comments}
           </span>
         </div>
       )}

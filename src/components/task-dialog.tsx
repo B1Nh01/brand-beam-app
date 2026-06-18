@@ -168,6 +168,17 @@ export function TaskDialog({ taskId, initialValues, onClose, onOpenPost }: Props
     if (!ws) return;
 
     if (isNew) {
+      // Resolve column_id: use one passed in initialValues, else find by status, else first column
+      let resolvedColumnId = (form as any).column_id ?? null;
+      if (!resolvedColumnId) {
+        const { data: cols } = await supabase
+          .from("task_boards_columns").select("id,name,is_done_column")
+          .eq("workspace_id", ws.id).order("position").limit(5);
+        if (cols?.length) {
+          const statusName = { backlog: "Backlog", todo: "A fazer", in_progress: "Em progresso", in_review: "Em revisão", done: "Concluído" }[form.status ?? "backlog"];
+          resolvedColumnId = cols.find((c) => c.name === statusName)?.id ?? cols[0].id;
+        }
+      }
       const payload = {
         workspace_id:  ws.id,
         client_id:     form.client_id ?? null,
@@ -179,6 +190,7 @@ export function TaskDialog({ taskId, initialValues, onClose, onOpenPost }: Props
         assignee_id:   form.assignee_id ?? null,
         due_date:      form.due_date ?? null,
         position:      0,
+        column_id:     resolvedColumnId,
         created_by:    me?.id ?? "",
       };
       const { data: newTask, error } = await supabase

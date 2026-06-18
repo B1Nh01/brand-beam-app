@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useWorkspace } from "@/hooks/use-workspace";
+import { useRole } from "@/hooks/use-role";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Lock } from "lucide-react";
 import {
   type FinancialRevenue,
   type FinancialExpense,
@@ -18,15 +19,41 @@ import { RevenueTab } from "@/components/finance/revenue-tab";
 import { ExpenseTab } from "@/components/finance/expense-tab";
 import { ReportTab } from "@/components/finance/report-tab";
 import { cn } from "@/lib/utils";
+import { RouteError } from "@/components/route-error";
 
 export const Route = createFileRoute("/_authenticated/finance")({
   component: Finance,
   head: () => ({ meta: [{ title: "Financeiro — Stúdio" }] }),
+  errorComponent: ({ error, reset }) => <RouteError error={error as Error} reset={reset} />,
 });
 
 function Finance() {
   const qc = useQueryClient();
   const { data: ws } = useWorkspace();
+  const role = useRole();
+  const navigate = useNavigate();
+
+  // P5: redirect members away from /finance
+  useEffect(() => {
+    if (role === "member") navigate({ to: "/dashboard" });
+  }, [role, navigate]);
+
+  // While role is loading or user is a member, show access denied
+  if (role === "member") {
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10">
+          <Lock className="h-7 w-7 text-destructive" />
+        </div>
+        <div>
+          <h2 className="text-lg font-semibold">Acesso restrito</h2>
+          <p className="mt-1 text-sm text-muted-foreground max-w-xs mx-auto">
+            Você não tem permissão para acessar esta área. Apenas donos do workspace podem ver o financeiro.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const now = new Date();
   const [year, setYear]   = useState(now.getFullYear());

@@ -16,6 +16,7 @@ export type Task = {
   assignee_id: string | null;
   due_date: string | null;
   position: number;
+  column_id: string | null;
   created_by: string;
   completed_at: string | null;
   created_at: string;

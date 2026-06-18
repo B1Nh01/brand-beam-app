@@ -14,10 +14,13 @@ import { type FinancialRevenue, formatBRL, monthRange } from "@/lib/financial";
 import { ClientFormDialog } from "@/components/client-form-dialog";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { RouteError } from "@/components/route-error";
+import { useRole } from "@/hooks/use-role";
 
 export const Route = createFileRoute("/_authenticated/clients")({
   component: Clients,
   head: () => ({ meta: [{ title: "Clientes — Stúdio" }] }),
+  errorComponent: ({ error, reset }) => <RouteError error={error as Error} reset={reset} />,
 });
 
 type ClientsData = {
@@ -30,6 +33,8 @@ type ClientsData = {
 function Clients() {
   const qc = useQueryClient();
   const { data: ws } = useWorkspace();
+  const role = useRole();
+  const isOwner = role === "owner";
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Client | null>(null);
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
@@ -179,7 +184,7 @@ function Clients() {
                   {c.description && (
                     <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">{c.description}</p>
                   )}
-                  {fee > 0 && (
+                  {isOwner && fee > 0 && (
                     <div className="mt-3 flex items-center justify-between border-t pt-2 text-xs">
                       <span className="font-medium text-muted-foreground">{formatBRL(fee)}/mês</span>
                       {payStatus === "paid" ? (

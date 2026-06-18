@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { TaskBoard } from "@/components/task-board";
+import { RouteError } from "@/components/route-error";
 
 export const Route = createFileRoute("/_authenticated/tasks")({
   component: TasksPage,
   head: () => ({ meta: [{ title: "Tarefas — Stúdio" }] }),
+  errorComponent: ({ error, reset }) => <RouteError error={error as Error} reset={reset} />,
 });
 
 function TasksPage() {

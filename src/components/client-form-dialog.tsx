@@ -12,6 +12,7 @@ import { ImagePlus, Camera, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { type Client } from "@/lib/content";
 import { cn } from "@/lib/utils";
+import { useRole } from "@/hooks/use-role";
 
 type Props = {
   workspaceId: string;
@@ -26,6 +27,8 @@ const ACCEPT = "image/jpeg,image/png,image/webp,image/gif";
 export function ClientFormDialog({ workspaceId, client, open, onOpenChange, onSaved }: Props) {
   const qc = useQueryClient();
   const isEdit = !!client;
+  const role = useRole();
+  const isOwner = role === "owner";
 
   const [name, setName] = useState(client?.name ?? "");
   const [ig, setIg] = useState(client?.instagram_handle ?? "");
@@ -190,10 +193,12 @@ export function ClientFormDialog({ workspaceId, client, open, onOpenChange, onSa
                 placeholder="Sobre o cliente, observações, contexto…"
               />
             </div>
-            <div className="space-y-2">
-              <Label>Mensalidade (R$)</Label>
-              <Input value={feeStr} onChange={handleFeeChange} inputMode="numeric" placeholder="0,00" />
-            </div>
+            {isOwner && (
+              <div className="space-y-2">
+                <Label>Mensalidade (R$)</Label>
+                <Input value={feeStr} onChange={handleFeeChange} inputMode="numeric" placeholder="0,00" />
+              </div>
+            )}
           </div>
         </div>
 

@@ -8,10 +8,12 @@ import { Clock, AlertTriangle, CheckCircle2, Users, ArrowRight, Activity } from 
 import { type Post, type Client, type ActivityLog } from "@/lib/content";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { RouteError } from "@/components/route-error";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
   head: () => ({ meta: [{ title: "Dashboard — Stúdio" }] }),
+  errorComponent: ({ error, reset }) => <RouteError error={error as Error} reset={reset} />,
 });
 
 function Dashboard() {

@@ -20,10 +20,12 @@ import { ConfirmDialog, type ConfirmState } from "@/components/confirm-dialog";
 import { Copy, Trash2, UserPlus, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { type FinancialSettings } from "@/lib/financial";
+import { RouteError } from "@/components/route-error";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   component: Settings,
   head: () => ({ meta: [{ title: "Configurações — Stúdio" }] }),
+  errorComponent: ({ error, reset }) => <RouteError error={error as Error} reset={reset} />,
 });
 
 function Settings() {
@@ -45,7 +47,7 @@ function Settings() {
     enabled: !!ws,
     queryFn: async () => {
       const { data, error } = await supabase.rpc("list_workspace_members", { _workspace_id: ws!.id });
-      if (error) throw error;
+      if (error) { console.error("[members query]", error); return []; }
       return data ?? [];
     },
   });
