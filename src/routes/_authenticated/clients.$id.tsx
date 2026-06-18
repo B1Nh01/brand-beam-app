@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { TaskBoard } from "@/components/task-board";
-import { BrandCore } from "@/components/brand-core";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -33,6 +32,8 @@ import {
   Filter,
   X,
   Pin,
+  Copy,
+  Link as LinkIcon,
 } from "lucide-react";
 import { type Post, type Client, type Tag, STATUS_LABELS, PLATFORM_LABELS, FORMAT_TYPE_LABELS, VEICULACAO_LABELS } from "@/lib/content";
 import {
@@ -70,6 +71,7 @@ function ClientSpace() {
   const { id } = Route.useParams();
   const [openPost, setOpenPost] = useState<string | null>(null);
   const [newPost, setNewPost] = useState<{ clientId: string; workspaceId: string; date?: string } | null>(null);
+  const [activeTab, setActiveTab] = useState<"calendar" | "tasks">("calendar");
 
   const { data } = useQuery({
     queryKey: ["posts", id],
@@ -118,7 +120,28 @@ function ClientSpace() {
                 <p className="truncate text-sm text-muted-foreground">{client?.instagram_handle}</p>
               </div>
             </div>
-            {client && <Button className="shrink-0" onClick={() => setNewPost({ clientId: client.id, workspaceId: client.workspace_id })}><Plus className="h-4 w-4" /> <span className="hidden sm:inline">Novo post</span></Button>}
+            <div className="flex shrink-0 items-center gap-2">
+              {client?.portal_token && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}/portal/${client.portal_token}`);
+                    toast.success("Link de aprovação copiado!");
+                  }}
+                >
+                  <LinkIcon className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Link de aprovação</span>
+                  <Copy className="h-3.5 w-3.5 sm:hidden" />
+                </Button>
+              )}
+              {client && (
+                <Button className="shrink-0" onClick={() => setNewPost({ clientId: client.id, workspaceId: client.workspace_id })}>
+                  <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Novo post</span>
+                </Button>
+              )}
+            </div>
           </div>
           {client?.description && (
             <p className="mt-3 text-sm text-muted-foreground">{client.description}</p>
@@ -126,12 +149,11 @@ function ClientSpace() {
         </div>
       </div>
 
-      <Tabs defaultValue="calendar">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "calendar" | "tasks")}>
         <div className="-mx-1 overflow-x-auto pb-1">
           <TabsList className="w-max">
             <TabsTrigger value="calendar">Calendário</TabsTrigger>
             <TabsTrigger value="tasks">Tarefas</TabsTrigger>
-            <TabsTrigger value="arquivos">Arquivos</TabsTrigger>
           </TabsList>
         </div>
 
@@ -147,10 +169,6 @@ function ClientSpace() {
 
         <TabsContent value="tasks" className="pt-4">
           <TaskBoard fixedClientId={id} />
-        </TabsContent>
-
-        <TabsContent value="arquivos" className="pt-4">
-          {client && <BrandCore clientId={id} workspaceId={client.workspace_id} />}
         </TabsContent>
       </Tabs>
 
