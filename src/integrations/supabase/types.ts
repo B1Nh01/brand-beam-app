@@ -524,6 +524,41 @@ export type Database = {
           },
         ]
       }
+      post_stages: {
+        Row: {
+          id: string
+          post_id: string
+          stage: string
+          status: string
+          content: Json
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          post_id: string
+          stage: string
+          status?: string
+          content?: Json
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          post_id?: string
+          stage?: string
+          status?: string
+          content?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_stages_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       posts: {
         Row: {
           approval_mode: Database["public"]["Enums"]["approval_mode"]
@@ -638,6 +673,7 @@ export type Database = {
         Row: {
           assignee_id: string | null
           client_id: string | null
+          column_id: string | null
           completed_at: string | null
           created_at: string
           created_by: string
@@ -655,6 +691,7 @@ export type Database = {
         Insert: {
           assignee_id?: string | null
           client_id?: string | null
+          column_id?: string | null
           completed_at?: string | null
           created_at?: string
           created_by: string
@@ -672,6 +709,7 @@ export type Database = {
         Update: {
           assignee_id?: string | null
           client_id?: string | null
+          column_id?: string | null
           completed_at?: string | null
           created_at?: string
           created_by?: string
@@ -747,6 +785,47 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "workspace_invites_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_boards_columns: {
+        Row: {
+          id: string
+          workspace_id: string
+          name: string
+          color: string
+          position: number
+          is_done_column: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          workspace_id: string
+          name: string
+          color?: string
+          position?: number
+          is_done_column?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          workspace_id?: string
+          name?: string
+          color?: string
+          position?: number
+          is_done_column?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_boards_columns_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -897,6 +976,18 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      portal_approve_stage: {
+        Args: { _token: string; _post_id: string; _stage: string; _author_name: string }
+        Returns: undefined
+      }
+      portal_get_post_stages: {
+        Args: { _token: string; _post_id: string }
+        Returns: { id: string; post_id: string; stage: string; status: string; content: Json; updated_at: string }[]
+      }
+      portal_request_stage_adjustment: {
+        Args: { _token: string; _post_id: string; _stage: string; _author_name: string; _body: string }
+        Returns: undefined
       }
       portal_approve: {
         Args: { _author_name: string; _post_id: string; _token: string }
@@ -1065,7 +1156,7 @@ export type Database = {
         | "impostos"
         | "outros"
       fin_status: "pending" | "paid" | "overdue" | "cancelled"
-      flow_stage: "idea" | "copy" | "media" | "final"
+      flow_stage: "tema" | "conteudo" | "midia" | "legenda"
       invite_status: "pending" | "accepted" | "expired"
       post_format: "static" | "carousel" | "reels" | "story"
       post_platform: "instagram" | "tiktok" | "both"
@@ -1225,7 +1316,7 @@ export const Constants = {
         "outros",
       ],
       fin_status: ["pending", "paid", "overdue", "cancelled"],
-      flow_stage: ["idea", "copy", "media", "final"],
+      flow_stage: ["tema", "conteudo", "midia", "legenda"],
       invite_status: ["pending", "accepted", "expired"],
       post_format: ["static", "carousel", "reels", "story"],
       post_platform: ["instagram", "tiktok", "both"],

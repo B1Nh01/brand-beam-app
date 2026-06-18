@@ -7,9 +7,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatusBadge } from "@/components/status-badge";
-import { FLOW_LABELS, type Post, type PostComment } from "@/lib/content";
-import { Check, Pencil, Send, Sparkles, CheckCircle2, PencilLine, Inbox, PartyPopper, Layers, FileText, Download } from "lucide-react";
+import { FLOW_LABELS, FLOW_ORDER, type Post, type PostComment, type FlowStage } from "@/lib/content";
+import { Check, Pencil, Send, Sparkles, CheckCircle2, PencilLine, Inbox, PartyPopper, Layers, FileText, Download, Lock } from "lucide-react";
+
+type PostStage = { id: string; post_id: string; stage: string; status: string; content: Record<string, string> | null };
+
+const STAGE_DOT: Record<string, string> = {
+  draft: "#9ca3af",
+  in_approval: "#f59e0b",
+  adjustment_requested: "#ef4444",
+  approved: "#22c55e",
+};
 import { type BrandModule, type BrandFile, type BrandFolder, MODULE_META, MODULE_ORDER, formatFileSize } from "@/lib/brand-core";
 import { toast } from "sonner";
 
@@ -155,15 +165,17 @@ function PortalPostDialog({ token, post, onClose, onChanged }: { token: string; 
   const qc = useQueryClient();
   const [name, setName] = useState(() => (typeof localStorage !== "undefined" ? localStorage.getItem("portal_name") ?? "" : ""));
   const [body, setBody] = useState("");
-  const [mode, setMode] = useState<null | "adjust">(null);
-  const [result, setResult] = useState<null | "approved" | "adjusted">(null);
+  const [adjustStage, setAdjustStage] = useState<FlowStage | null>(null);
+  const [activeTab, setActiveTab] = useState<FlowStage>("tema");
+  const [allApproved, setAllApproved] = useState(false);
+
+  const isFlowMode = post.approval_mode === "flow";
 
   const { data: media } = useQuery({
     queryKey: ["portal-media", token, post.id],
     queryFn: async () => {
       const { data } = await supabase.rpc("portal_get_media", { _token: token });
-      const all = (data ?? []).filter((m: any) => m.post_id === post.id);
-      return all;
+      return (data ?? []).filter((m: any) => m.post_id === post.id);
     },
   });
   const { data: comments } = useQuery({
@@ -173,6 +185,18 @@ function PortalPostDialog({ token, post, onClose, onChanged }: { token: string; 
       return (data ?? []) as PostComment[];
     },
   });
+  const { data: stages, refetch: refetchStages } = useQuery({
+    queryKey: ["portal-stages", token, post.id],
+    enabled: isFlowMode,
+    queryFn: async () => {
+      const { data } = await supabase.rpc("portal_get_post_stages", { _token: token, _post_id: post.id });
+      return (data ?? []) as PostStage[];
+    },
+  });
+
+  const stageMap = Object.fromEntries((stages ?? []).map((s) => [s.stage, s]));
+  const getStageStatus = (stage: FlowStage) => stageMap[stage]?.status ?? "draft";
+  const getStageContent = (stage: FlowStage) => stageMap[stage]?.content ?? null;
 
   const ensureName = () => {
     if (!name.trim()) { toast.error("Informe seu nome primeiro"); return false; }
@@ -180,22 +204,50 @@ function PortalPostDialog({ token, post, onClose, onChanged }: { token: string; 
     return true;
   };
 
+  // ── Flow mode: per-stage actions ──────────────────────────
+
+  const approveStage = async (stage: FlowStage) => {
+    if (!ensureName()) return;
+    const { error } = await supabase.rpc("portal_approve_stage", {
+      _token: token, _post_id: post.id, _stage: stage, _author_name: name,
+    });
+    if (error) return toast.error("Não foi possível aprovar");
+    toast.success("Etapa aprovada!");
+    onChanged();
+    const { data: updated } = await refetchStages();
+    const allDone = FLOW_ORDER.every((s) => {
+      const found = (updated ?? []).find((r) => r.stage === s);
+      return found?.status === "approved";
+    });
+    if (allDone) setAllApproved(true);
+  };
+
+  const requestStageAdjust = async (stage: FlowStage) => {
+    if (!ensureName()) return;
+    if (!body.trim()) return toast.error("Descreva o ajuste");
+    const { error } = await supabase.rpc("portal_request_stage_adjustment", {
+      _token: token, _post_id: post.id, _stage: stage, _author_name: name, _body: body,
+    });
+    if (error) return toast.error("Não foi possível enviar");
+    toast.success("Ajuste solicitado");
+    setBody(""); setAdjustStage(null);
+    onChanged(); refetchStages();
+  };
+
+  // ── Fast mode: whole-post actions ──────────────────────────
+
   const approve = async () => {
     if (!ensureName()) return;
     const { error } = await supabase.rpc("portal_approve", { _token: token, _post_id: post.id, _author_name: name });
     if (error) return toast.error("Não foi possível aprovar");
-    toast.success("Post aprovado!");
-    onChanged();
-    setResult("approved");
+    toast.success("Post aprovado!"); onChanged(); setAllApproved(true);
   };
   const requestAdjust = async () => {
     if (!ensureName()) return;
     if (!body.trim()) return toast.error("Descreva o ajuste");
     const { error } = await supabase.rpc("portal_request_adjustment", { _token: token, _post_id: post.id, _author_name: name, _body: body });
     if (error) return toast.error("Não foi possível enviar");
-    toast.success("Ajuste solicitado");
-    onChanged();
-    setResult("adjusted");
+    toast.success("Ajuste solicitado"); onChanged();
   };
   const sendComment = async () => {
     if (!ensureName() || !body.trim()) return;
@@ -203,65 +255,197 @@ function PortalPostDialog({ token, post, onClose, onChanged }: { token: string; 
     setBody(""); qc.invalidateQueries({ queryKey: ["portal-comments", token, post.id] });
   };
 
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
-        {result ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-8 text-center">
-            <div className={`flex h-16 w-16 items-center justify-center rounded-full ${result === "approved" ? "bg-success/15 text-success-foreground" : "bg-warning/15 text-warning-foreground"}`}>
-              {result === "approved" ? <CheckCircle2 className="h-8 w-8" /> : <PencilLine className="h-8 w-8" />}
+  // ── All approved screen ────────────────────────────────────
+
+  if (allApproved) {
+    return (
+      <Dialog open onOpenChange={(o) => !o && onClose()}>
+        <DialogContent className="max-w-sm">
+          <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
+            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-success/15">
+              <PartyPopper className="h-10 w-10 text-success-foreground" />
             </div>
-            <h3 className="text-lg font-bold">
-              {result === "approved" ? "✅ Post aprovado!" : "✏️ Ajuste solicitado!"}
-            </h3>
+            <h3 className="text-xl font-bold">Tudo aprovado! 🎉</h3>
             <p className="max-w-xs text-sm text-muted-foreground">
-              {result === "approved"
-                ? "A equipe foi notificada e seguirá com a produção."
-                : "Enviamos seu pedido para a equipe. Aguarde o retorno com a nova versão."}
+              Todas as etapas foram aprovadas. A equipe foi notificada e seguirá com a produção.
             </p>
             <Button className="mt-2 w-full" onClick={onClose}>Voltar aos posts</Button>
           </div>
-        ) : (
-        <>
-        <DialogHeader><DialogTitle className="flex items-center gap-2">{post.title} <StatusBadge status={post.status} flowStage={post.flow_stage} approvalMode={post.approval_mode} /></DialogTitle></DialogHeader>
-        <div className="space-y-4">
-          {post.approval_mode === "flow" && post.status !== "approved" && (
-            <div className="rounded-lg bg-accent p-3 text-sm">Etapa em aprovação: <strong>{FLOW_LABELS[post.flow_stage]}</strong></div>
-          )}
-          {media && media.length > 0 && (
-            <div className="grid grid-cols-3 gap-2">
-              {media.map((m: any) => <PortalMedia key={m.id} path={m.storage_path} type={m.type} />)}
-            </div>
-          )}
-          {post.caption && <p className="whitespace-pre-wrap rounded-lg border p-3 text-sm">{post.caption}</p>}
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
-          <div className="space-y-2">
-            <Input placeholder="Seu nome" value={name} onChange={(e) => setName(e.target.value)} />
-            <div className="max-h-40 space-y-2 overflow-auto">
-              {comments?.map((c) => (
-                <div key={c.id} className={`rounded-lg p-2 text-sm ${c.author_type === "team" ? "bg-primary/10" : "bg-muted"}`}>
-                  <p className="text-xs font-semibold">{c.author_type === "team" ? "Equipe" : c.author_name}</p>{c.body}
-                </div>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <Input placeholder={mode === "adjust" ? "Descreva o ajuste…" : "Comentar…"} value={body} onChange={(e) => setBody(e.target.value)} />
-              <Button size="icon" variant="secondary" onClick={sendComment}><Send className="h-4 w-4" /></Button>
+  // ── Main dialog ────────────────────────────────────────────
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className={isFlowMode ? "max-w-2xl" : "max-w-lg"}>
+        <DialogHeader>
+          <DialogTitle className="flex flex-wrap items-center gap-2">
+            {post.title}
+            <StatusBadge status={post.status} flowStage={post.flow_stage} approvalMode={post.approval_mode} />
+          </DialogTitle>
+        </DialogHeader>
+
+        {/* Name input (always visible at top) */}
+        <div className="mb-2">
+          <Input placeholder="Seu nome" value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+
+        {isFlowMode ? (
+          /* ── Content Flow: per-stage tabs ── */
+          <div className="space-y-4">
+            <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as FlowStage); setAdjustStage(null); setBody(""); }}>
+              <TabsList className="grid w-full grid-cols-4">
+                {FLOW_ORDER.map((stage) => {
+                  const status = getStageStatus(stage);
+                  return (
+                    <TabsTrigger key={stage} value={stage} className="gap-1.5 text-xs">
+                      <span className="h-2 w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: STAGE_DOT[status] ?? "#9ca3af" }} />
+                      {FLOW_LABELS[stage]}
+                    </TabsTrigger>
+                  );
+                })}
+              </TabsList>
+
+              {FLOW_ORDER.map((stage) => {
+                const status = getStageStatus(stage);
+                const stageContent = getStageContent(stage);
+                const isActionable = status === "in_approval";
+                const isApproved = status === "approved";
+                const isAdjusting = adjustStage === stage;
+
+                return (
+                  <TabsContent key={stage} value={stage} className="space-y-3">
+                    {/* Status banner */}
+                    <div className={`rounded-lg px-3 py-2 text-sm font-medium ${
+                      isActionable ? "bg-warning/15 text-warning-foreground" :
+                      isApproved ? "bg-success/15 text-success-foreground" :
+                      status === "adjustment_requested" ? "bg-destructive/10 text-destructive" :
+                      "bg-muted text-muted-foreground"
+                    }`}>
+                      {isActionable && "⏳ Esta etapa aguarda sua aprovação"}
+                      {isApproved && "✅ Etapa aprovada"}
+                      {status === "adjustment_requested" && "✏️ Ajuste solicitado — aguardando revisão da equipe"}
+                      {status === "draft" && <span className="flex items-center gap-1.5"><Lock className="h-3.5 w-3.5" /> Ainda não enviada para aprovação</span>}
+                    </div>
+
+                    {/* Stage content */}
+                    {stage === "tema" && (
+                      <div className="space-y-2">
+                        {post.idea && <p className="whitespace-pre-wrap rounded-lg border p-3 text-sm">{post.idea}</p>}
+                        {stageContent && Object.values(stageContent).some(Boolean) && (
+                          <div className="space-y-1">
+                            <p className="text-xs font-semibold text-muted-foreground">Referências:</p>
+                            {[stageContent.ref_link_1, stageContent.ref_link_2, stageContent.ref_link_3]
+                              .filter(Boolean)
+                              .map((link, i) => (
+                                <a key={i} href={link} target="_blank" rel="noopener noreferrer" className="block truncate text-xs text-primary underline">
+                                  {link}
+                                </a>
+                              ))}
+                          </div>
+                        )}
+                        {!post.idea && <p className="text-sm text-muted-foreground">Nenhum conteúdo de tema ainda.</p>}
+                      </div>
+                    )}
+                    {stage === "conteudo" && (
+                      post.copy
+                        ? <p className="whitespace-pre-wrap rounded-lg border p-3 text-sm">{post.copy}</p>
+                        : <p className="text-sm text-muted-foreground">Nenhum conteúdo de copy ainda.</p>
+                    )}
+                    {stage === "midia" && (
+                      media && media.length > 0
+                        ? <div className="grid grid-cols-3 gap-2">{media.map((m: any) => <PortalMedia key={m.id} path={m.storage_path} type={m.type} />)}</div>
+                        : <p className="text-sm text-muted-foreground">Nenhuma mídia enviada ainda.</p>
+                    )}
+                    {stage === "legenda" && (
+                      post.caption
+                        ? <p className="whitespace-pre-wrap rounded-lg border p-3 text-sm">{post.caption}</p>
+                        : <p className="text-sm text-muted-foreground">Nenhuma legenda ainda.</p>
+                    )}
+
+                    {/* Actions (only for in_approval stage) */}
+                    {isActionable && (
+                      <div className="space-y-2">
+                        {isAdjusting && (
+                          <Input
+                            autoFocus
+                            placeholder="Descreva o ajuste necessário…"
+                            value={body}
+                            onChange={(e) => setBody(e.target.value)}
+                          />
+                        )}
+                        <div className="flex gap-2">
+                          <Button className="flex-1" onClick={() => approveStage(stage)}>
+                            <Check className="h-4 w-4" /> Aprovar etapa
+                          </Button>
+                          {isAdjusting ? (
+                            <Button className="flex-1" variant="destructive" onClick={() => requestStageAdjust(stage)}>
+                              Enviar ajuste
+                            </Button>
+                          ) : (
+                            <Button className="flex-1" variant="outline" onClick={() => setAdjustStage(stage)}>
+                              <Pencil className="h-4 w-4" /> Solicitar ajuste
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </TabsContent>
+                );
+              })}
+            </Tabs>
+
+            {/* Shared comments */}
+            <div className="border-t pt-3 space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground">Comentários</p>
+              <div className="max-h-32 space-y-2 overflow-auto">
+                {comments?.map((c) => (
+                  <div key={c.id} className={`rounded-lg p-2 text-sm ${c.author_type === "team" ? "bg-primary/10" : "bg-muted"}`}>
+                    <p className="text-xs font-semibold">{c.author_type === "team" ? "Equipe" : c.author_name}</p>
+                    {c.body}
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <Input placeholder="Comentar…" value={body} onChange={(e) => setBody(e.target.value)} />
+                <Button size="icon" variant="secondary" onClick={sendComment}><Send className="h-4 w-4" /></Button>
+              </div>
             </div>
           </div>
+        ) : (
+          /* ── Content Fast: whole-post approval ── */
+          <div className="space-y-4">
+            {media && media.length > 0 && (
+              <div className="grid grid-cols-3 gap-2">
+                {media.map((m: any) => <PortalMedia key={m.id} path={m.storage_path} type={m.type} />)}
+              </div>
+            )}
+            {post.caption && <p className="whitespace-pre-wrap rounded-lg border p-3 text-sm">{post.caption}</p>}
 
-          {(post.status === "in_approval" || post.status === "adjustment_requested") && (
-            <div className="flex gap-2">
-              <Button className="flex-1" onClick={approve}><Check className="h-4 w-4" /> Aprovar</Button>
-              {mode === "adjust" ? (
-                <Button className="flex-1" variant="destructive" onClick={requestAdjust}>Enviar ajuste</Button>
-              ) : (
-                <Button className="flex-1" variant="outline" onClick={() => setMode("adjust")}><Pencil className="h-4 w-4" /> Solicitar ajuste</Button>
-              )}
+            <div className="space-y-2">
+              <div className="max-h-40 space-y-2 overflow-auto">
+                {comments?.map((c) => (
+                  <div key={c.id} className={`rounded-lg p-2 text-sm ${c.author_type === "team" ? "bg-primary/10" : "bg-muted"}`}>
+                    <p className="text-xs font-semibold">{c.author_type === "team" ? "Equipe" : c.author_name}</p>{c.body}
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <Input placeholder="Comentar…" value={body} onChange={(e) => setBody(e.target.value)} />
+                <Button size="icon" variant="secondary" onClick={sendComment}><Send className="h-4 w-4" /></Button>
+              </div>
             </div>
-          )}
-        </div>
-        </>
+
+            {(post.status === "in_approval" || post.status === "adjustment_requested") && (
+              <div className="flex gap-2">
+                <Button className="flex-1" onClick={approve}><Check className="h-4 w-4" /> Aprovar</Button>
+                <Button className="flex-1" variant="outline" onClick={requestAdjust}><Pencil className="h-4 w-4" /> Solicitar ajuste</Button>
+              </div>
+            )}
+          </div>
         )}
       </DialogContent>
     </Dialog>

@@ -96,13 +96,13 @@ export const STATUS_CLASSES: Record<PostStatus, string> = {
 };
 
 export const FLOW_LABELS: Record<FlowStage, string> = {
-  idea: "Ideia",
-  copy: "Copy",
-  media: "Mídia",
-  final: "Final",
+  tema: "Tema",
+  conteudo: "Conteúdo",
+  midia: "Mídia",
+  legenda: "Legenda",
 };
 
-export const FLOW_ORDER: FlowStage[] = ["idea", "copy", "media", "final"];
+export const FLOW_ORDER: FlowStage[] = ["tema", "conteudo", "midia", "legenda"];
 
 export const FORMAT_LABELS: Record<PostFormat, string> = {
   static: "Estático",

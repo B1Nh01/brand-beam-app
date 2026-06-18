@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/empty-state";
 import { ConfirmDialog, type ConfirmState } from "@/components/confirm-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, MoreVertical, Copy, RefreshCw, Pause, Archive, UsersRound, Pencil, Play } from "lucide-react";
+import { Plus, MoreVertical, Copy, RefreshCw, Pause, Archive, UsersRound, Pencil, Play, DollarSign } from "lucide-react";
 import { type Client, type Post } from "@/lib/content";
 import { type FinancialRevenue, formatBRL, monthRange } from "@/lib/financial";
 import { ClientFormDialog } from "@/components/client-form-dialog";
@@ -16,6 +16,28 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { RouteError } from "@/components/route-error";
 import { useRole } from "@/hooks/use-role";
+
+const GRADIENT_PALETTE: [string, string][] = [
+  ["#7c3aed", "#4f46e5"],
+  ["#6d28d9", "#db2777"],
+  ["#4f46e5", "#0891b2"],
+  ["#7c3aed", "#9333ea"],
+  ["#8b5cf6", "#06b6d4"],
+  ["#6366f1", "#ec4899"],
+  ["#a855f7", "#6366f1"],
+  ["#7c3aed", "#2563eb"],
+  ["#9333ea", "#f43f5e"],
+  ["#6d28d9", "#4ade80"],
+  ["#8b5cf6", "#f59e0b"],
+  ["#4f46e5", "#10b981"],
+];
+
+function clientGradient(id: string): string {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (Math.imul(31, h) + id.charCodeAt(i)) | 0;
+  const [c1, c2] = GRADIENT_PALETTE[Math.abs(h) % GRADIENT_PALETTE.length];
+  return `linear-gradient(135deg, ${c1}, ${c2})`;
+}
 
 export const Route = createFileRoute("/_authenticated/clients")({
   component: Clients,
@@ -133,18 +155,31 @@ function Clients() {
             const avatar = imgUrl(c.avatar_url);
             const brand = c.brand_color ?? "#2563eb";
 
+            const clientPosts = data.posts.filter((p) => p.client_id === c.id);
+            const draftCount = clientPosts.filter((p) => p.status === "draft").length;
+            const adjustCount = clientPosts.filter((p) => p.status === "adjustment_requested").length;
+            const approvalCount = clientPosts.filter((p) => p.status === "in_approval").length;
+            const approvedCount = clientPosts.filter((p) => p.status === "approved").length;
+            const gradient = clientGradient(c.id);
+
             return (
               <div key={c.id} className={cn("overflow-hidden rounded-xl border bg-card transition-shadow hover:shadow-sm", c.status !== "active" && "opacity-60")}>
-                {/* Cover */}
-                <div className="relative h-20">
-                  {cover ? (
-                    <img src={cover} alt="" loading="lazy" className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="h-full w-full" style={{ background: `linear-gradient(135deg, ${brand}, ${brand}99)` }} />
+                {/* Gradient strip */}
+                <div className="relative h-20" style={{ background: gradient }}>
+                  {cover && (
+                    <img src={cover} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover opacity-60" />
+                  )}
+                  {/* Fee badge — owner only */}
+                  {isOwner && fee > 0 && (
+                    <div className="absolute left-2 top-2 flex items-center gap-1 rounded-full bg-black/40 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur-sm">
+                      <DollarSign className="h-2.5 w-2.5" />
+                      {formatBRL(fee)}
+                      {payStatus === "paid" ? " ✓" : payStatus ? " ●" : ""}
+                    </div>
                   )}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="secondary" size="icon" className="absolute right-2 top-2 h-7 w-7 bg-background/80 backdrop-blur">
+                      <Button variant="secondary" size="icon" className="absolute right-2 top-2 h-7 w-7 bg-black/30 text-white backdrop-blur hover:bg-black/50">
                         <MoreVertical className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
@@ -172,7 +207,7 @@ function Clients() {
 
                 <Link to="/clients/$id" params={{ id: c.id }} className="block p-4 pt-0">
                   <div className="-mt-7 mb-2 flex items-end justify-between gap-2">
-                    <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border-4 border-card text-base font-bold text-primary-foreground" style={{ backgroundColor: brand }}>
+                    <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border-4 border-card text-base font-bold text-white" style={{ background: gradient }}>
                       {avatar ? <img src={avatar} alt="" loading="lazy" className="h-full w-full object-cover" /> : c.name.charAt(0)}
                     </span>
                     {pending > 0 && (
@@ -181,19 +216,25 @@ function Clients() {
                   </div>
                   <p className="truncate font-semibold">{c.name}</p>
                   <p className="truncate text-xs text-muted-foreground">{c.instagram_handle ?? "—"}</p>
-                  {c.description && (
-                    <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">{c.description}</p>
-                  )}
-                  {isOwner && fee > 0 && (
-                    <div className="mt-3 flex items-center justify-between border-t pt-2 text-xs">
-                      <span className="font-medium text-muted-foreground">{formatBRL(fee)}/mês</span>
-                      {payStatus === "paid" ? (
-                        <span title="Mensalidade paga">✅</span>
-                      ) : payStatus ? (
-                        <span title="Mensalidade pendente">🟡</span>
-                      ) : null}
-                    </div>
-                  )}
+
+                  {/* Post status counters */}
+                  <div className="mt-2.5 flex flex-wrap gap-1.5">
+                    {draftCount > 0 && (
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">{draftCount} rascunho{draftCount !== 1 ? "s" : ""}</span>
+                    )}
+                    {adjustCount > 0 && (
+                      <span className="rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] text-destructive">{adjustCount} ajuste{adjustCount !== 1 ? "s" : ""}</span>
+                    )}
+                    {approvalCount > 0 && (
+                      <span className="rounded-full bg-warning/20 px-2 py-0.5 text-[10px] text-warning-foreground">{approvalCount} aprovação</span>
+                    )}
+                    {approvedCount > 0 && (
+                      <span className="rounded-full bg-success/20 px-2 py-0.5 text-[10px] text-success-foreground">{approvedCount} aprovado{approvedCount !== 1 ? "s" : ""}</span>
+                    )}
+                    {clientPosts.length === 0 && (
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">Sem posts</span>
+                    )}
+                  </div>
                 </Link>
               </div>
             );
