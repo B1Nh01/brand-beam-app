@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { TaskBoard } from "@/components/task-board";
 import { BrandCore } from "@/components/brand-core";
@@ -8,8 +8,27 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatusBadge } from "@/components/status-badge";
 import { PostDialog } from "@/components/post-dialog";
-import { Plus, ChevronLeft, ChevronRight, Heart, MessageCircle, Grid3x3, ArrowUpDown } from "lucide-react";
-import { type Post, type Client } from "@/lib/content";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Plus,
+  ChevronLeft,
+  ChevronRight,
+  Heart,
+  MessageCircle,
+  Grid3x3,
+  ArrowUpDown,
+  ChevronDown,
+  Filter,
+  X,
+} from "lucide-react";
+import { type Post, type Client, type Tag, STATUS_LABELS, PLATFORM_LABELS, FORMAT_TYPE_LABELS, VEICULACAO_LABELS } from "@/lib/content";
 import {
   DndContext,
   DragOverlay,
@@ -39,6 +58,8 @@ export const Route = createFileRoute("/_authenticated/clients/$id")({
   errorComponent: ({ error, reset }) => <RouteError error={error as Error} reset={reset} />,
 });
 
+type PostWithTags = Post & { post_tags?: { tag_id: string }[] };
+
 function ClientSpace() {
   const { id } = Route.useParams();
   const [openPost, setOpenPost] = useState<string | null>(null);
@@ -49,7 +70,7 @@ function ClientSpace() {
     queryFn: async () => {
       const [client, posts] = await Promise.all([
         supabase.from("clients").select("*").eq("id", id).single(),
-        supabase.from("posts").select("*").eq("client_id", id).order("scheduled_date"),
+        supabase.from("posts").select("*, post_tags(tag_id)").eq("client_id", id).order("scheduled_date"),
       ]);
       const c = client.data as Client | null;
       const media: Record<string, string> = {};
@@ -58,7 +79,7 @@ function ClientSpace() {
         const { data: signed } = await supabase.storage.from("client-media").createSignedUrls(paths, 3600);
         for (const s of signed ?? []) if (s.path && s.signedUrl) media[s.path] = s.signedUrl;
       }
-      return { client: c as Client, posts: (posts.data ?? []) as Post[], media };
+      return { client: c as Client, posts: (posts.data ?? []) as PostWithTags[], media };
     },
   });
 
@@ -99,7 +120,6 @@ function ClientSpace() {
         </div>
       </div>
 
-
       <Tabs defaultValue="calendar">
         <div className="-mx-1 overflow-x-auto pb-1">
           <TabsList className="w-max">
@@ -110,7 +130,13 @@ function ClientSpace() {
         </div>
 
         <TabsContent value="calendar" className="pt-4">
-          <CalendarView posts={posts} clientId={id} onOpen={setOpenPost} onNew={(d) => client && setNewPost({ clientId: client.id, workspaceId: client.workspace_id, date: d })} />
+          <CalendarView
+            posts={posts}
+            clientId={id}
+            workspaceId={client?.workspace_id ?? ""}
+            onOpen={setOpenPost}
+            onNew={(d) => client && setNewPost({ clientId: client.id, workspaceId: client.workspace_id, date: d })}
+          />
         </TabsContent>
 
         <TabsContent value="tasks" className="pt-4">
@@ -127,12 +153,202 @@ function ClientSpace() {
   );
 }
 
-function CalendarView({ posts, clientId, onOpen, onNew }: { posts: Post[]; clientId: string; onOpen: (id: string) => void; onNew: (date: string) => void }) {
+// ── Filter helpers ────────────────────────────────────────────────────────────
+
+function MultiFilter({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: [string, string][];
+  value: string[];
+  onChange: (v: string[]) => void;
+}) {
+  const toggle = (v: string) =>
+    onChange(value.includes(v) ? value.filter((x) => x !== v) : [...value, v]);
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          size="sm"
+          variant={value.length ? "default" : "outline"}
+          className="h-7 gap-1 text-xs"
+        >
+          {label}
+          {value.length > 0 && (
+            <span className="ml-0.5 rounded-full bg-background/25 px-1.5 text-[10px] font-bold leading-4">
+              {value.length}
+            </span>
+          )}
+          <ChevronDown className="h-3 w-3 opacity-60" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="min-w-[140px]">
+        {options.map(([k, v]) => (
+          <DropdownMenuCheckboxItem
+            key={k}
+            checked={value.includes(k)}
+            onCheckedChange={() => toggle(k)}
+          >
+            {v}
+          </DropdownMenuCheckboxItem>
+        ))}
+        {value.length > 0 && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => onChange([])}>
+              <X className="mr-1.5 h-3 w-3" /> Limpar
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function TagFilter({
+  tags,
+  value,
+  onChange,
+}: {
+  tags: Tag[];
+  value: string[];
+  onChange: (v: string[]) => void;
+}) {
+  const toggle = (id: string) =>
+    onChange(value.includes(id) ? value.filter((x) => x !== id) : [...value, id]);
+
+  if (!tags.length) return null;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          size="sm"
+          variant={value.length ? "default" : "outline"}
+          className="h-7 gap-1 text-xs"
+        >
+          Tags
+          {value.length > 0 && (
+            <span className="ml-0.5 rounded-full bg-background/25 px-1.5 text-[10px] font-bold leading-4">
+              {value.length}
+            </span>
+          )}
+          <ChevronDown className="h-3 w-3 opacity-60" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="min-w-[160px]">
+        {tags.map((t) => (
+          <DropdownMenuCheckboxItem
+            key={t.id}
+            checked={value.includes(t.id)}
+            onCheckedChange={() => toggle(t.id)}
+          >
+            <span
+              className="mr-2 inline-block h-2.5 w-2.5 flex-shrink-0 rounded-full"
+              style={{ backgroundColor: t.color }}
+            />
+            {t.name}
+          </DropdownMenuCheckboxItem>
+        ))}
+        {value.length > 0 && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => onChange([])}>
+              <X className="mr-1.5 h-3 w-3" /> Limpar
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+// ── CalendarView ──────────────────────────────────────────────────────────────
+
+function CalendarView({
+  posts,
+  clientId,
+  workspaceId,
+  onOpen,
+  onNew,
+}: {
+  posts: PostWithTags[];
+  clientId: string;
+  workspaceId: string;
+  onOpen: (id: string) => void;
+  onNew: (date: string) => void;
+}) {
   const qc = useQueryClient();
-  const [activePost, setActivePost] = useState<Post | null>(null);
+  const [activePost, setActivePost] = useState<PostWithTags | null>(null);
   const [view, setView] = useState<"month" | "week" | "feed">("month");
   const [currentDate, setCurrentDate] = useState(() => new Date());
 
+  // ── Filter state ──────────────────────────────────────────────────────────
+  const [fPlatform, setFPlatform]     = useState<string[]>([]);
+  const [fFormatType, setFFormatType] = useState<string[]>([]);
+  const [fVeiculacao, setFVeiculacao] = useState<string[]>([]);
+  const [fStatus, setFStatus]         = useState<string[]>([]);
+  const [fTagIds, setFTagIds]         = useState<string[]>([]);
+
+  const hasFilters = fPlatform.length + fFormatType.length + fVeiculacao.length + fStatus.length + fTagIds.length > 0;
+
+  const clearFilters = () => {
+    setFPlatform([]); setFFormatType([]); setFVeiculacao([]); setFStatus([]); setFTagIds([]);
+  };
+
+  // ── Tags for filter options ───────────────────────────────────────────────
+  const { data: clientTags = [] } = useQuery<Tag[]>({
+    queryKey: ["tags", clientId],
+    enabled: !!clientId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("tags")
+        .select("*")
+        .or(`client_id.eq.${clientId},client_id.is.null`)
+        .order("name");
+      return (data ?? []) as Tag[];
+    },
+  });
+
+  // ── Post → tag_ids map from embedded join ─────────────────────────────────
+  const postTagsMap = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    for (const p of posts) {
+      map[p.id] = p.post_tags?.map((pt) => pt.tag_id) ?? [];
+    }
+    return map;
+  }, [posts]);
+
+  // ── Filtered posts ────────────────────────────────────────────────────────
+  const filteredPosts = useMemo(() => {
+    return posts.filter((p) => {
+      if (fPlatform.length && !fPlatform.includes(p.platform)) return false;
+
+      if (fFormatType.length) {
+        const ft = p.format_type ?? (p.format === "story" ? "stories" : "feed");
+        if (!fFormatType.includes(ft)) return false;
+      }
+
+      if (fVeiculacao.length) {
+        if (!p.veiculacao || !fVeiculacao.includes(p.veiculacao)) return false;
+      }
+
+      if (fStatus.length && !fStatus.includes(p.status)) return false;
+
+      if (fTagIds.length) {
+        const tags = postTagsMap[p.id] ?? [];
+        if (!fTagIds.some((t) => tags.includes(t))) return false;
+      }
+
+      return true;
+    });
+  }, [posts, fPlatform, fFormatType, fVeiculacao, fStatus, fTagIds, postTagsMap]);
+
+  // ── Calendar config ───────────────────────────────────────────────────────
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   );
@@ -206,6 +422,7 @@ function CalendarView({ posts, clientId, onOpen, onNew }: { posts: Post[]; clien
     ? currentDate.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })
     : `${weekCells[0].toLocaleDateString("pt-BR", { day: "numeric", month: "short" })} – ${weekCells[6].toLocaleDateString("pt-BR", { day: "numeric", month: "short", year: "numeric" })}`;
 
+  // ── Shared UI pieces ──────────────────────────────────────────────────────
   const viewToggle = (
     <div className="flex gap-1">
       <Button size="sm" variant={view === "month" ? "default" : "outline"} onClick={() => setView("month")}>Mês</Button>
@@ -214,18 +431,65 @@ function CalendarView({ posts, clientId, onOpen, onNew }: { posts: Post[]; clien
     </div>
   );
 
+  const filterBar = (
+    <div className="mb-3 flex flex-wrap items-center gap-1.5">
+      <Filter className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      <MultiFilter
+        label="Canal"
+        options={Object.entries(PLATFORM_LABELS) as [string, string][]}
+        value={fPlatform}
+        onChange={setFPlatform}
+      />
+      <MultiFilter
+        label="Formato"
+        options={Object.entries(FORMAT_TYPE_LABELS) as [string, string][]}
+        value={fFormatType}
+        onChange={setFFormatType}
+      />
+      <MultiFilter
+        label="Veiculação"
+        options={Object.entries(VEICULACAO_LABELS) as [string, string][]}
+        value={fVeiculacao}
+        onChange={setFVeiculacao}
+      />
+      <MultiFilter
+        label="Status"
+        options={[
+          ["draft", "Rascunho"],
+          ["in_approval", "Em aprovação"],
+          ["adjustment_requested", "Ajuste solicitado"],
+          ["approved", "Aprovado"],
+          ["scheduled", "Agendado"],
+          ["published", "Publicado"],
+        ]}
+        value={fStatus}
+        onChange={setFStatus}
+      />
+      <TagFilter tags={clientTags} value={fTagIds} onChange={setFTagIds} />
+      {hasFilters && (
+        <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs text-muted-foreground" onClick={clearFilters}>
+          <X className="h-3 w-3" /> Limpar filtros
+        </Button>
+      )}
+    </div>
+  );
+
+  // ── Feed view (outside DndContext to avoid nested contexts) ───────────────
   if (view === "feed") {
     return (
       <div>
+        {filterBar}
         <div className="mb-3 flex items-center justify-end">{viewToggle}</div>
-        <FeedPreview posts={posts} clientId={clientId} onOpen={onOpen} />
+        <FeedPreview posts={filteredPosts} clientId={clientId} onOpen={onOpen} />
       </div>
     );
   }
 
+  // ── Month / Week view ─────────────────────────────────────────────────────
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div className="rounded-xl border bg-card p-3">
+        {filterBar}
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Button size="icon" variant="ghost" onClick={goPrev}><ChevronLeft className="h-4 w-4" /></Button>
@@ -246,7 +510,7 @@ function CalendarView({ posts, clientId, onOpen, onNew }: { posts: Post[]; clien
                 key={i}
                 day={d}
                 dateStr={d ? iso(d) : ""}
-                posts={d ? posts.filter((p) => p.scheduled_date === iso(d)) : []}
+                posts={d ? filteredPosts.filter((p) => p.scheduled_date === iso(d)) : []}
                 onOpen={onOpen}
                 onNew={onNew}
               />
@@ -261,7 +525,7 @@ function CalendarView({ posts, clientId, onOpen, onNew }: { posts: Post[]; clien
                   key={i}
                   day={d.getDate()}
                   dateStr={dateStr}
-                  posts={posts.filter((p) => p.scheduled_date === dateStr)}
+                  posts={filteredPosts.filter((p) => p.scheduled_date === dateStr)}
                   onOpen={onOpen}
                   onNew={onNew}
                 />
@@ -342,9 +606,9 @@ function DraggablePost({ post, onOpen }: { post: Post; onOpen: (id: string) => v
   );
 }
 
-function FeedPreview({ posts, clientId, onOpen }: { posts: Post[]; clientId: string; onOpen: (id: string) => void }) {
+function FeedPreview({ posts, clientId, onOpen }: { posts: PostWithTags[]; clientId: string; onOpen: (id: string) => void }) {
   const qc = useQueryClient();
-  const [items, setItems] = useState<Post[]>([]);
+  const [items, setItems] = useState<PostWithTags[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -379,7 +643,7 @@ function FeedPreview({ posts, clientId, onOpen }: { posts: Post[]; clientId: str
     staleTime: 55 * 60 * 1000,
   });
 
-  const persistOrder = async (ordered: Post[]) => {
+  const persistOrder = async (ordered: PostWithTags[]) => {
     const results = await Promise.all(
       ordered.map((p, i) => supabase.from("posts").update({ position: i }).eq("id", p.id))
     );
@@ -416,7 +680,6 @@ function FeedPreview({ posts, clientId, onOpen }: { posts: Post[]; clientId: str
 
   return (
     <div className="flex flex-col items-center gap-4">
-      {/* Toolbar */}
       <div className="flex w-full max-w-[320px] items-center justify-between text-xs text-muted-foreground">
         <span className="flex items-center gap-1.5">
           <Grid3x3 className="h-3.5 w-3.5" />
@@ -427,14 +690,11 @@ function FeedPreview({ posts, clientId, onOpen }: { posts: Post[]; clientId: str
         </Button>
       </div>
 
-      {/* Phone frame */}
       <div className="relative w-[320px] rounded-[2.5rem] border-[6px] border-foreground/10 bg-foreground/5 shadow-2xl overflow-hidden">
-        {/* Status bar notch */}
         <div className="absolute top-0 left-0 right-0 h-6 bg-background/80 backdrop-blur flex items-center justify-center">
           <div className="h-1.5 w-12 rounded-full bg-foreground/20" />
         </div>
 
-        {/* Instagram-style header */}
         <div className="mt-6 flex items-center justify-between border-b border-border/40 bg-background px-4 py-2.5">
           <div className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-full bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 p-0.5">
@@ -450,7 +710,6 @@ function FeedPreview({ posts, clientId, onOpen }: { posts: Post[]; clientId: str
           </div>
         </div>
 
-        {/* Feed grid */}
         <div className="bg-background">
           <DndContext
             sensors={sensors}
@@ -479,14 +738,12 @@ function FeedPreview({ posts, clientId, onOpen }: { posts: Post[]; clientId: str
           </DndContext>
         </div>
 
-        {/* Instagram-style nav bar */}
         <div className="flex items-center justify-around border-t border-border/40 bg-background px-4 py-3">
           {["⌂", "🔍", "＋", "♡", "👤"].map((icon, i) => (
             <span key={i} className="text-base opacity-60">{icon}</span>
           ))}
         </div>
 
-        {/* Home indicator */}
         <div className="flex justify-center bg-background pb-2 pt-1">
           <div className="h-1 w-24 rounded-full bg-foreground/20" />
         </div>
@@ -519,7 +776,6 @@ function FeedTileContent({ post, cover, dragging }: { post: Post; cover?: string
   );
 }
 
-/** Stable pseudo-random number seeded from a string (deterministic per post). */
 function seededInt(seed: string, min: number, max: number) {
   let h = 0;
   for (let i = 0; i < seed.length; i++) h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;

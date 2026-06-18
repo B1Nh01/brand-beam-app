@@ -568,6 +568,7 @@ export type Database = {
           created_at: string
           flow_stage: Database["public"]["Enums"]["flow_stage"]
           format: Database["public"]["Enums"]["post_format"]
+          format_type: string | null
           id: string
           idea: string | null
           platform: Database["public"]["Enums"]["post_platform"]
@@ -577,6 +578,7 @@ export type Database = {
           status: Database["public"]["Enums"]["post_status"]
           title: string
           updated_at: string
+          veiculacao: string | null
           workspace_id: string
         }
         Insert: {
@@ -587,6 +589,7 @@ export type Database = {
           created_at?: string
           flow_stage?: Database["public"]["Enums"]["flow_stage"]
           format?: Database["public"]["Enums"]["post_format"]
+          format_type?: string | null
           id?: string
           idea?: string | null
           platform?: Database["public"]["Enums"]["post_platform"]
@@ -596,6 +599,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["post_status"]
           title?: string
           updated_at?: string
+          veiculacao?: string | null
           workspace_id: string
         }
         Update: {
@@ -606,6 +610,7 @@ export type Database = {
           created_at?: string
           flow_stage?: Database["public"]["Enums"]["flow_stage"]
           format?: Database["public"]["Enums"]["post_format"]
+          format_type?: string | null
           id?: string
           idea?: string | null
           platform?: Database["public"]["Enums"]["post_platform"]
@@ -615,6 +620,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["post_status"]
           title?: string
           updated_at?: string
+          veiculacao?: string | null
           workspace_id?: string
         }
         Relationships: [
@@ -630,6 +636,78 @@ export type Database = {
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      post_tags: {
+        Row: {
+          post_id: string
+          tag_id: string
+        }
+        Insert: {
+          post_id: string
+          tag_id: string
+        }
+        Update: {
+          post_id?: string
+          tag_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_tags_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_tags_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tags: {
+        Row: {
+          client_id: string | null
+          color: string
+          created_at: string
+          id: string
+          name: string
+          workspace_id: string
+        }
+        Insert: {
+          client_id?: string | null
+          color?: string
+          created_at?: string
+          id?: string
+          name: string
+          workspace_id: string
+        }
+        Update: {
+          client_id?: string | null
+          color?: string
+          created_at?: string
+          id?: string
+          name?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tags_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tags_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
             referencedColumns: ["id"]
           },
         ]

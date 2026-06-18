@@ -23,14 +23,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatusBadge } from "@/components/status-badge";
 import {
   FORMAT_LABELS,
+  FORMAT_TYPE_LABELS,
+  VEICULACAO_LABELS,
   PLATFORM_LABELS,
   APPROVAL_LABELS,
   FLOW_LABELS,
   FLOW_ORDER,
+  TAG_PALETTE,
   type Post,
   type PostComment,
   type PostMedia,
   type FlowStage,
+  type Tag,
 } from "@/lib/content";
 import { toast } from "sonner";
 import {
@@ -46,7 +50,22 @@ import {
   MessageCircle,
   Share2,
   Link as LinkIcon,
+  Tag as TagIcon,
+  X,
 } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import {
   Collapsible,
   CollapsibleContent,
@@ -109,6 +128,7 @@ export function PostDialog({ postId, newForClient, onClose }: Props) {
   const [newTaskValues, setNewTaskValues] = useState<Partial<Task> | null>(null);
   const [activeTab, setActiveTab] = useState<FlowStage>("tema");
   const [refLinks, setRefLinks] = useState<[string, string, string]>(["", "", ""]);
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
 
   // ── Queries ──────────────────────────────────────────────────
 
@@ -179,6 +199,33 @@ export function PostDialog({ postId, newForClient, onClose }: Props) {
     },
   });
 
+  const effectiveClientId = clientId ?? newForClient?.clientId ?? null;
+  const effectiveWorkspaceId = form.workspace_id ?? newForClient?.workspaceId ?? null;
+
+  const tagsQuery = useQuery<Tag[]>({
+    queryKey: ["tags", effectiveWorkspaceId, effectiveClientId],
+    enabled: !!effectiveWorkspaceId,
+    queryFn: async () => {
+      let q = supabase.from("tags").select("*").eq("workspace_id", effectiveWorkspaceId!);
+      if (effectiveClientId) {
+        q = (q as any).or(`client_id.eq.${effectiveClientId},client_id.is.null`);
+      } else {
+        q = (q as any).is("client_id", null);
+      }
+      const { data } = await (q as any).order("name");
+      return (data ?? []) as Tag[];
+    },
+  });
+
+  const postTagsQuery = useQuery<string[]>({
+    queryKey: ["post-tags", postId],
+    enabled: !!postId,
+    queryFn: async () => {
+      const { data } = await supabase.from("post_tags").select("tag_id").eq("post_id", postId!);
+      return (data ?? []).map((r: { tag_id: string }) => r.tag_id);
+    },
+  });
+
   // ── Derived ──────────────────────────────────────────────────
 
   const stageStatusMap = useMemo(() => {
@@ -221,6 +268,10 @@ export function PostDialog({ postId, newForClient, onClose }: Props) {
     }
   }, [stagesQuery.data]);
 
+  useEffect(() => {
+    if (postTagsQuery.data) setSelectedTagIds(postTagsQuery.data);
+  }, [postTagsQuery.data]);
+
   // ── Mutations ────────────────────────────────────────────────
 
   const invalidate = () => {
@@ -228,6 +279,14 @@ export function PostDialog({ postId, newForClient, onClose }: Props) {
     qc.invalidateQueries({ queryKey: ["post", postId] });
     qc.invalidateQueries({ queryKey: ["activity"] });
     qc.invalidateQueries({ queryKey: ["dashboard"] });
+  };
+
+  const syncTags = async (pid: string) => {
+    await supabase.from("post_tags").delete().eq("post_id", pid);
+    if (selectedTagIds.length) {
+      await supabase.from("post_tags").insert(selectedTagIds.map((tag_id) => ({ post_id: pid, tag_id })));
+    }
+    qc.invalidateQueries({ queryKey: ["post-tags", pid] });
   };
 
   const logActivity = async (action: string) => {
@@ -256,6 +315,8 @@ export function PostDialog({ postId, newForClient, onClose }: Props) {
           caption: form.caption,
           format: form.format as Post["format"],
           platform: form.platform as Post["platform"],
+          format_type: form.format_type ?? null,
+          veiculacao: form.veiculacao ?? null,
           scheduled_date: form.scheduled_date,
           scheduled_time: form.scheduled_time,
           approval_mode: form.approval_mode as Post["approval_mode"],
@@ -263,6 +324,7 @@ export function PostDialog({ postId, newForClient, onClose }: Props) {
         .select()
         .single();
       if (error) return toast.error(error.message);
+      if (selectedTagIds.length) await syncTags(data.id);
       await supabase.from("activity_log").insert({
         workspace_id: newForClient!.workspaceId,
         client_id: newForClient!.clientId,
@@ -285,12 +347,15 @@ export function PostDialog({ postId, newForClient, onClose }: Props) {
         caption: form.caption,
         format: form.format as Post["format"],
         platform: form.platform as Post["platform"],
+        format_type: form.format_type ?? null,
+        veiculacao: form.veiculacao ?? null,
         scheduled_date: form.scheduled_date,
         scheduled_time: form.scheduled_time,
         approval_mode: form.approval_mode as Post["approval_mode"],
       })
       .eq("id", postId!);
     if (error) return toast.error(error.message);
+    await syncTags(postId!);
 
     // Save Tema ref links
     if (refLinks.some((l) => l.trim())) {
@@ -429,6 +494,20 @@ export function PostDialog({ postId, newForClient, onClose }: Props) {
                   onChange={(v) => setForm({ ...form, platform: v as Post["platform"] })}
                 />
                 <SelectField
+                  label="Local (Feed/Stories)"
+                  value={form.format_type ?? undefined}
+                  options={FORMAT_TYPE_LABELS}
+                  onChange={(v) => setForm({ ...form, format_type: v || null })}
+                  placeholder="Não definido"
+                />
+                <SelectField
+                  label="Veiculação"
+                  value={form.veiculacao ?? undefined}
+                  options={VEICULACAO_LABELS}
+                  onChange={(v) => setForm({ ...form, veiculacao: v || null })}
+                  placeholder="Não definido"
+                />
+                <SelectField
                   label="Modo de aprovação"
                   value={form.approval_mode}
                   options={APPROVAL_LABELS}
@@ -443,6 +522,16 @@ export function PostDialog({ postId, newForClient, onClose }: Props) {
                   />
                 </div>
               </div>
+
+              {/* Tags */}
+              <TagPicker
+                tags={tagsQuery.data ?? []}
+                selectedIds={selectedTagIds}
+                onChange={setSelectedTagIds}
+                workspaceId={effectiveWorkspaceId}
+                clientId={effectiveClientId}
+                onTagCreated={() => qc.invalidateQueries({ queryKey: ["tags"] })}
+              />
             </div>
 
             {/* Stage tabs */}
@@ -845,20 +934,28 @@ function SelectField({
   value,
   options,
   onChange,
+  placeholder,
 }: {
   label: string;
   value?: string | null;
   options: Record<string, string>;
   onChange: (v: string) => void;
+  placeholder?: string;
 }) {
   return (
     <div className="space-y-1.5">
       <Label>{label}</Label>
-      <Select value={value ?? undefined} onValueChange={onChange}>
+      <Select
+        value={value ?? (placeholder ? "__none__" : undefined)}
+        onValueChange={(v) => onChange(v === "__none__" ? "" : v)}
+      >
         <SelectTrigger>
-          <SelectValue />
+          <SelectValue placeholder={placeholder ?? "Selecionar"} />
         </SelectTrigger>
         <SelectContent>
+          {placeholder && (
+            <SelectItem value="__none__">{placeholder}</SelectItem>
+          )}
           {Object.entries(options).map(([k, v]) => (
             <SelectItem key={k} value={k}>
               {v}
@@ -866,6 +963,144 @@ function SelectField({
           ))}
         </SelectContent>
       </Select>
+    </div>
+  );
+}
+
+// ── Helper: tag picker ───────────────────────────────────────────
+
+function TagPicker({
+  tags,
+  selectedIds,
+  onChange,
+  workspaceId,
+  clientId,
+  onTagCreated,
+}: {
+  tags: Tag[];
+  selectedIds: string[];
+  onChange: (ids: string[]) => void;
+  workspaceId: string | null;
+  clientId: string | null;
+  onTagCreated: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [creating, setCreating] = useState(false);
+
+  const selected = tags.filter((t) => selectedIds.includes(t.id));
+  const filtered = tags.filter((t) =>
+    t.name.toLowerCase().includes(search.toLowerCase())
+  );
+  const canCreate =
+    search.trim().length > 0 &&
+    !filtered.some((t) => t.name.toLowerCase() === search.trim().toLowerCase());
+
+  const toggle = (id: string) => {
+    onChange(selectedIds.includes(id) ? selectedIds.filter((x) => x !== id) : [...selectedIds, id]);
+  };
+
+  const createTag = async () => {
+    if (!workspaceId || !search.trim() || creating) return;
+    setCreating(true);
+    const color = TAG_PALETTE[Math.floor(Math.random() * TAG_PALETTE.length)];
+    const { data, error } = await supabase
+      .from("tags")
+      .insert({ workspace_id: workspaceId, client_id: clientId ?? null, name: search.trim(), color })
+      .select()
+      .single();
+    setCreating(false);
+    if (error || !data) return toast.error("Erro ao criar tag");
+    onTagCreated();
+    onChange([...selectedIds, data.id]);
+    setSearch("");
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <Label className="flex items-center gap-1.5">
+        <TagIcon className="h-3.5 w-3.5" /> Tags
+      </Label>
+      <div className="flex flex-wrap items-center gap-1.5 rounded-md border bg-background px-2 py-1.5 min-h-9">
+        {selected.map((t) => (
+          <span
+            key={t.id}
+            className="flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[11px] font-medium text-white"
+            style={{ backgroundColor: t.color }}
+          >
+            {t.name}
+            <button
+              type="button"
+              onClick={() => toggle(t.id)}
+              className="ml-0.5 opacity-70 hover:opacity-100 leading-none"
+            >
+              <X className="h-2.5 w-2.5" />
+            </button>
+          </span>
+        ))}
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="flex items-center gap-1 rounded-full border border-dashed px-2 py-0.5 text-[11px] text-muted-foreground hover:border-foreground/40 hover:text-foreground transition-colors"
+            >
+              <Plus className="h-3 w-3" /> Adicionar
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-52 p-0" align="start">
+            <Command>
+              <CommandInput
+                placeholder="Buscar ou criar tag..."
+                value={search}
+                onValueChange={setSearch}
+              />
+              <CommandList>
+                <CommandEmpty className="py-2 px-3 text-xs text-muted-foreground">
+                  {canCreate ? (
+                    <button
+                      onClick={createTag}
+                      disabled={creating}
+                      className="flex w-full items-center gap-2 rounded py-1 text-left hover:text-foreground"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Criar &ldquo;{search}&rdquo;
+                    </button>
+                  ) : (
+                    "Nenhuma tag encontrada"
+                  )}
+                </CommandEmpty>
+                <CommandGroup>
+                  {filtered.map((t) => (
+                    <CommandItem
+                      key={t.id}
+                      value={t.name}
+                      onSelect={() => {
+                        toggle(t.id);
+                        setSearch("");
+                      }}
+                    >
+                      <span
+                        className="mr-2 inline-block h-2.5 w-2.5 flex-shrink-0 rounded-full"
+                        style={{ backgroundColor: t.color }}
+                      />
+                      <span className="flex-1">{t.name}</span>
+                      {selectedIds.includes(t.id) && (
+                        <span className="ml-auto text-xs text-muted-foreground">✓</span>
+                      )}
+                    </CommandItem>
+                  ))}
+                  {canCreate && (
+                    <CommandItem value={`create:${search}`} onSelect={createTag} disabled={creating}>
+                      <Plus className="mr-2 h-3.5 w-3.5" />
+                      Criar &ldquo;{search}&rdquo;
+                    </CommandItem>
+                  )}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+      </div>
     </div>
   );
 }

@@ -58,6 +58,7 @@ export const TASK_PRIORITY_CLASSES: Record<TaskPriority, string> = {
 
 export type Client = Database["public"]["Tables"]["clients"]["Row"];
 export type Post = Database["public"]["Tables"]["posts"]["Row"];
+export type Tag = Database["public"]["Tables"]["tags"]["Row"];
 export type PostMedia = Database["public"]["Tables"]["post_media"]["Row"];
 export type PostComment = Database["public"]["Tables"]["post_comments"]["Row"];
 export type ActivityLog = Database["public"]["Tables"]["activity_log"]["Row"];
@@ -121,3 +122,18 @@ export const APPROVAL_LABELS: Record<ApprovalMode, string> = {
   fast: "Content Fast",
   flow: "Content Flow",
 };
+
+export const FORMAT_TYPE_LABELS: Record<string, string> = {
+  feed:    "Feed",
+  stories: "Stories",
+};
+
+export const VEICULACAO_LABELS: Record<string, string> = {
+  video: "Vídeo",
+  post:  "Post",
+};
+
+export const TAG_PALETTE = [
+  "#6366f1", "#8b5cf6", "#ec4899", "#ef4444",
+  "#f59e0b", "#10b981", "#06b6d4", "#3b82f6",
+];
