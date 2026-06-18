@@ -230,7 +230,9 @@ export type Database = {
         Row: {
           avatar_url: string | null
           brand_color: string | null
+          cover_url: string | null
           created_at: string
+          description: string | null
           id: string
           instagram_handle: string | null
           monthly_fee: number | null
@@ -245,7 +247,9 @@ export type Database = {
         Insert: {
           avatar_url?: string | null
           brand_color?: string | null
+          cover_url?: string | null
           created_at?: string
+          description?: string | null
           id?: string
           instagram_handle?: string | null
           monthly_fee?: number | null
@@ -260,7 +264,9 @@ export type Database = {
         Update: {
           avatar_url?: string | null
           brand_color?: string | null
+          cover_url?: string | null
           created_at?: string
+          description?: string | null
           id?: string
           instagram_handle?: string | null
           monthly_fee?: number | null
@@ -817,7 +823,9 @@ export type Database = {
         Returns: {
           avatar_url: string | null
           brand_color: string | null
+          cover_url: string | null
           created_at: string
+          description: string | null
           id: string
           instagram_handle: string | null
           monthly_fee: number | null
