@@ -91,7 +91,7 @@ export function ClientFormDialog({ workspaceId, client, open, onOpenChange, onSa
         clientId = created.id;
       }
 
-      const updates: Record<string, unknown> = {
+      const updates: Partial<Client> = {
         name: name.trim(),
         instagram_handle: ig || null,
         description: description || null,
