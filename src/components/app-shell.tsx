@@ -57,9 +57,11 @@ function AppSidebar() {
   const { data: openTaskCount = 0 } = useQuery<number>({
     queryKey: ["my-open-tasks"],
     queryFn: async () => {
-      const { data } = await supabase.rpc("my_open_task_count");
+      const { data, error } = await supabase.rpc("my_open_task_count");
+      if (error) return 0;
       return (data as number) ?? 0;
     },
+    retry: false,
     refetchInterval: 60_000,
   });
 
@@ -67,11 +69,13 @@ function AppSidebar() {
     queryKey: ["finance-overdue", ws?.id],
     enabled: !!ws,
     queryFn: async () => {
-      const { data } = await supabase.rpc("overdue_revenue_count", {
+      const { data, error } = await supabase.rpc("overdue_revenue_count", {
         _workspace_id: ws!.id,
       });
+      if (error) return 0;
       return (data as number) ?? 0;
     },
+    retry: false,
     refetchInterval: 5 * 60_000,
   });
 

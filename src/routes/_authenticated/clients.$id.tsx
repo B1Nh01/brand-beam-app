@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatusBadge } from "@/components/status-badge";
 import { PostDialog } from "@/components/post-dialog";
-import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight, Heart, MessageCircle, Grid3x3, ArrowUpDown } from "lucide-react";
 import { FORMAT_LABELS, type Post, type Client } from "@/lib/content";
 import {
   DndContext,
@@ -355,7 +355,7 @@ function FeedPreview({ posts, clientId, onOpen }: { posts: Post[]; clientId: str
   const [activeId, setActiveId] = useState<string | null>(null);
 
   useEffect(() => {
-    setItems([...posts].sort((a, b) => a.position - b.position));
+    setItems([...posts].sort((a, b) => (a.position ?? 0) - (b.position ?? 0)));
   }, [posts]);
 
   const sensors = useSensors(
@@ -365,30 +365,32 @@ function FeedPreview({ posts, clientId, onOpen }: { posts: Post[]; clientId: str
   const { data: covers } = useQuery({
     queryKey: ["feed-covers", clientId],
     queryFn: async () => {
-      const { data } = await supabase.from("post_media").select("*").in("post_id", posts.map((p) => p.id)).order("sort_order");
+      if (!posts.length) return {} as Record<string, string>;
+      const { data } = await supabase
+        .from("post_media")
+        .select("*")
+        .in("post_id", posts.map((p) => p.id))
+        .order("sort_order");
       const map: Record<string, string> = {};
       for (const m of data ?? []) {
         if (!map[m.post_id]) {
-          const { data: s } = await supabase.storage.from("post-media").createSignedUrl(m.storage_path, 3600);
+          const { data: s } = await supabase.storage
+            .from("post-media")
+            .createSignedUrl(m.storage_path, 3600);
           if (s?.signedUrl) map[m.post_id] = s.signedUrl;
         }
       }
       return map;
     },
     enabled: posts.length > 0,
+    staleTime: 55 * 60 * 1000,
   });
 
   const persistOrder = async (ordered: Post[]) => {
     const results = await Promise.all(
-      ordered.map((p, i) =>
-        supabase.from("posts").update({ position: i }).eq("id", p.id)
-      )
+      ordered.map((p, i) => supabase.from("posts").update({ position: i }).eq("id", p.id))
     );
-    const failed = results.find((r) => r.error);
-    if (failed?.error) {
-      toast.error("Erro ao atualizar ordem");
-      return false;
-    }
+    if (results.find((r) => r.error)) { toast.error("Erro ao atualizar ordem"); return false; }
     qc.invalidateQueries({ queryKey: ["posts", clientId] });
     return true;
   };
@@ -407,11 +409,9 @@ function FeedPreview({ posts, clientId, onOpen }: { posts: Post[]; clientId: str
 
   const resetByDate = async () => {
     const sorted = [...items].sort((a, b) => {
-      const da = a.scheduled_date ?? "";
-      const db = b.scheduled_date ?? "";
+      const da = a.scheduled_date ?? ""; const db = b.scheduled_date ?? "";
       if (!da && !db) return 0;
-      if (!da) return 1;
-      if (!db) return -1;
+      if (!da) return 1; if (!db) return -1;
       return da.localeCompare(db);
     });
     setItems(sorted);
@@ -419,45 +419,108 @@ function FeedPreview({ posts, clientId, onOpen }: { posts: Post[]; clientId: str
   };
 
   const activePost = items.find((p) => p.id === activeId);
+  const visibleCount = items.filter((p) => p.status !== "draft").length;
 
   return (
-    <div className="mx-auto max-w-md space-y-3">
-      <div className="flex justify-end">
-        <Button size="sm" variant="outline" onClick={resetByDate}>Redefinir ordem por data</Button>
+    <div className="flex flex-col items-center gap-4">
+      {/* Toolbar */}
+      <div className="flex w-full max-w-[320px] items-center justify-between text-xs text-muted-foreground">
+        <span className="flex items-center gap-1.5">
+          <Grid3x3 className="h-3.5 w-3.5" />
+          {visibleCount} post{visibleCount !== 1 ? "s" : ""} no preview
+        </span>
+        <Button size="sm" variant="ghost" className="h-7 gap-1.5 px-2 text-xs" onClick={resetByDate}>
+          <ArrowUpDown className="h-3 w-3" /> Ordenar por data
+        </Button>
       </div>
-      <div className="rounded-xl border bg-card p-2">
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragStart={(e) => setActiveId(e.active.id as string)}
-          onDragEnd={handleDragEnd}
-          onDragCancel={() => setActiveId(null)}
-        >
-          <SortableContext items={items.map((p) => p.id)} strategy={rectSortingStrategy}>
-            <div className="grid grid-cols-3 gap-1">
-              {items.map((p) => (
-                <SortableTile key={p.id} post={p} cover={covers?.[p.id]} onOpen={onOpen} />
-              ))}
+
+      {/* Phone frame */}
+      <div className="relative w-[320px] rounded-[2.5rem] border-[6px] border-foreground/10 bg-foreground/5 shadow-2xl overflow-hidden">
+        {/* Status bar notch */}
+        <div className="absolute top-0 left-0 right-0 h-6 bg-background/80 backdrop-blur flex items-center justify-center">
+          <div className="h-1.5 w-12 rounded-full bg-foreground/20" />
+        </div>
+
+        {/* Instagram-style header */}
+        <div className="mt-6 flex items-center justify-between border-b border-border/40 bg-background px-4 py-2.5">
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-full bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 p-0.5">
+              <div className="h-full w-full rounded-full bg-background flex items-center justify-center text-[10px] font-bold text-foreground">
+                {posts[0] ? "A" : "—"}
+              </div>
             </div>
-          </SortableContext>
-          <DragOverlay>
-            {activePost ? (
-              <FeedTileContent post={activePost} cover={covers?.[activePost.id]} dragging />
-            ) : null}
-          </DragOverlay>
-        </DndContext>
+            <span className="text-xs font-semibold">preview</span>
+          </div>
+          <div className="flex gap-3 text-foreground/70">
+            <div className="h-4 w-4 rounded-sm border border-current opacity-60" />
+            <div className="h-4 w-4 rounded-full border border-current opacity-60" />
+          </div>
+        </div>
+
+        {/* Feed grid */}
+        <div className="bg-background">
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={(e) => setActiveId(e.active.id as string)}
+            onDragEnd={handleDragEnd}
+            onDragCancel={() => setActiveId(null)}
+          >
+            <SortableContext items={items.map((p) => p.id)} strategy={rectSortingStrategy}>
+              <div className="grid grid-cols-3 gap-px bg-border/30">
+                {items.map((p) => (
+                  <SortableTile key={p.id} post={p} cover={covers?.[p.id]} onOpen={onOpen} />
+                ))}
+                {items.length === 0 && (
+                  <div className="col-span-3 py-16 text-center text-xs text-muted-foreground">
+                    Nenhum post ainda
+                  </div>
+                )}
+              </div>
+            </SortableContext>
+            <DragOverlay dropAnimation={null}>
+              {activePost ? (
+                <FeedTileContent post={activePost} cover={covers?.[activePost.id]} dragging />
+              ) : null}
+            </DragOverlay>
+          </DndContext>
+        </div>
+
+        {/* Instagram-style nav bar */}
+        <div className="flex items-center justify-around border-t border-border/40 bg-background px-4 py-3">
+          {["⌂", "🔍", "＋", "♡", "👤"].map((icon, i) => (
+            <span key={i} className="text-base opacity-60">{icon}</span>
+          ))}
+        </div>
+
+        {/* Home indicator */}
+        <div className="flex justify-center bg-background pb-2 pt-1">
+          <div className="h-1 w-24 rounded-full bg-foreground/20" />
+        </div>
       </div>
+
+      <p className="text-[11px] text-muted-foreground">
+        Arraste os posts para reordenar o feed
+      </p>
     </div>
   );
 }
 
 function FeedTileContent({ post, cover, dragging }: { post: Post; cover?: string; dragging?: boolean }) {
   return (
-    <div className={cn("relative aspect-square w-full overflow-hidden rounded bg-muted", dragging && "ring-2 ring-primary shadow-lg")}>
+    <div
+      className={cn(
+        "relative aspect-square w-full overflow-hidden bg-muted",
+        post.status === "draft" && "opacity-40",
+        dragging && "ring-2 ring-primary shadow-lg opacity-90",
+      )}
+    >
       {cover ? (
         <img src={cover} alt={post.title} className="h-full w-full object-cover" />
       ) : (
-        <span className="flex h-full items-center justify-center p-1 text-center text-[10px] text-muted-foreground">{post.title}</span>
+        <span className="flex h-full items-center justify-center p-1 text-center text-[9px] leading-tight text-muted-foreground">
+          {post.title}
+        </span>
       )}
     </div>
   );
@@ -465,11 +528,14 @@ function FeedTileContent({ post, cover, dragging }: { post: Post; cover?: string
 
 function SortableTile({ post, cover, onOpen }: { post: Post; cover?: string; onOpen: (id: string) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: post.id });
+  const [hovered, setHovered] = useState(false);
+
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0 : post.status === "draft" ? 0.5 : 1,
+    opacity: isDragging ? 0 : 1,
   };
+
   return (
     <button
       ref={setNodeRef}
@@ -477,9 +543,24 @@ function SortableTile({ post, cover, onOpen }: { post: Post; cover?: string; onO
       {...attributes}
       {...listeners}
       onClick={() => onOpen(post.id)}
-      className="touch-none"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className="relative touch-none block w-full"
     >
       <FeedTileContent post={post} cover={cover} />
+      {/* Hover overlay */}
+      {hovered && post.status !== "draft" && (
+        <div className="absolute inset-0 flex items-center justify-center gap-3 bg-black/40 text-white">
+          <span className="flex items-center gap-1 text-xs font-semibold drop-shadow">
+            <Heart className="h-4 w-4 fill-white" />
+            {Math.floor(Math.random() * 900 + 100)}
+          </span>
+          <span className="flex items-center gap-1 text-xs font-semibold drop-shadow">
+            <MessageCircle className="h-4 w-4 fill-white" />
+            {Math.floor(Math.random() * 90 + 10)}
+          </span>
+        </div>
+      )}
     </button>
   );
 }

@@ -104,12 +104,14 @@ export function TaskBoard({ fixedClientId }: Props) {
     });
   }, [tasks, filters]);
 
-  // Sync colItems when data changes
+  // Sync colItems when data changes — guard against unknown status values
   useEffect(() => {
     const grouped: Record<TaskStatus, string[]> = {
       backlog: [], todo: [], in_progress: [], in_review: [], done: [],
     };
-    for (const t of filtered) grouped[t.status].push(t.id);
+    for (const t of filtered) {
+      if (t.status in grouped) grouped[t.status].push(t.id);
+    }
     setColItems(grouped);
   }, [filtered]);
 
