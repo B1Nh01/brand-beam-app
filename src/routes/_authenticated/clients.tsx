@@ -14,11 +14,12 @@ import {
   Search, Instagram, Music2, Eye, ExternalLink,
 } from "lucide-react";
 import { type Client, type Post } from "@/lib/content";
-import { type FinancialRevenue, monthRange } from "@/lib/financial";
+import { type FinancialRevenue, formatBRL, monthRange } from "@/lib/financial";
 import { ClientFormDialog } from "@/components/client-form-dialog";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { RouteError } from "@/components/route-error";
+import { useRole } from "@/hooks/use-role";
 
 const GRADIENT_PALETTE: [string, string][] = [
   ["#7c3aed", "#4f46e5"],
@@ -73,6 +74,7 @@ const STATUS_BADGE: Record<Client["status"], { label: string; cls: string }> = {
 function Clients() {
   const qc = useQueryClient();
   const { data: ws } = useWorkspace();
+  const isOwner = useRole() === "owner";
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Client | null>(null);
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
@@ -217,6 +219,8 @@ function Clients() {
             const total = clientPosts.length;
             const pending = clientPosts.filter((p) => p.status === "in_approval" || p.status === "adjustment_requested").length;
             const published = clientPosts.filter((p) => p.status === "published").length;
+            const fee = Number(c.monthly_fee ?? 0);
+            const payStatus = data!.revenues.find((r) => r.client_id === c.id)?.status;
             const avatar = imgUrl(c.avatar_url);
             const brand = c.brand_color ?? undefined;
             const gradient = clientGradient(c.id);
@@ -309,6 +313,21 @@ function Clients() {
                       <p className="mt-1 text-xs text-muted-foreground">Publicados</p>
                     </div>
                   </div>
+
+                  {/* Monthly fee — owner only */}
+                  {isOwner && fee > 0 && (
+                    <div className="mt-3 flex items-center justify-between border-t pt-2 text-xs">
+                      <span className="text-muted-foreground">Mensalidade</span>
+                      <span className="font-medium">
+                        {formatBRL(fee)}
+                        {payStatus === "paid" ? (
+                          <span className="ml-1 text-success-foreground">• pago</span>
+                        ) : payStatus ? (
+                          <span className="ml-1 text-warning-foreground">• pendente</span>
+                        ) : null}
+                      </span>
+                    </div>
+                  )}
 
                   {/* Actions */}
                   <div className="mt-4 flex items-center gap-2">

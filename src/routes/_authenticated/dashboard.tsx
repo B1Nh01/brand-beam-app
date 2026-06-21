@@ -98,8 +98,8 @@ function Dashboard() {
               return (
                 <Link key={c.id} to="/clients/$id" params={{ id: c.id }} className="flex items-center justify-between rounded-lg border p-3 hover:bg-accent">
                   <div className="flex items-center gap-2">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold text-primary-foreground" style={{ backgroundColor: c.brand_color ?? "#7c3aed" }}>
-                      {c.name.charAt(0)}
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold text-white" style={{ backgroundColor: c.brand_color ?? "#7c3aed" }}>
+                      {c.name.slice(0, 2).toUpperCase()}
                     </span>
                     <span className="text-sm font-medium">{c.name}</span>
                   </div>

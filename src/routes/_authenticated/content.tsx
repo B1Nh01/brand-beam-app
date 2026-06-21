@@ -372,7 +372,7 @@ function ContentBoard() {
                     )}
                     {groupBy === "client" && groupClient && (
                       <span
-                        className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white"
+                        className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md text-[9px] font-bold text-white"
                         style={{ backgroundColor: brand }}
                       >
                         {groupClient.name.charAt(0)}
