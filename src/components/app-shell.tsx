@@ -4,6 +4,7 @@ import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import {
   LayoutDashboard,
   Users,
+  Users2,
   KanbanSquare,
   Settings,
   LogOut,
@@ -39,6 +40,7 @@ const mainItems = [
   { title: "Clientes",     url: "/clients",   icon: Users },
   { title: "Visão central",url: "/content",   icon: KanbanSquare },
   { title: "Tarefas",      url: "/tasks",     icon: ListChecks },
+  { title: "Equipe",       url: "/team",      icon: Users2 },
   { title: "Financeiro",   url: "/finance",   icon: Wallet },
   { title: "Configurações",url: "/settings",  icon: Settings },
 ];
