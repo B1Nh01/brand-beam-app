@@ -8,7 +8,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { StatusBadge } from "@/components/status-badge";
 import { PostDialog } from "@/components/post-dialog";
 import { Button } from "@/components/ui/button";
-import { LayoutGrid, List, ArrowUpDown, CalendarDays, User, Pin } from "lucide-react";
+import { LayoutGrid, List, ArrowUpDown, CalendarDays, User, Pin, CalendarRange, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval,
+  isSameMonth, isSameDay, addMonths, subMonths, format,
+} from "date-fns";
+import { ptBR } from "date-fns/locale";
 import {
   STATUS_LABELS, FORMAT_LABELS,
   type Post, type Client, type PostStatus,
@@ -23,7 +28,7 @@ export const Route = createFileRoute("/_authenticated/content")({
 });
 
 type GroupBy = "status" | "client" | "format" | "date";
-type ViewMode = "kanban" | "list";
+type ViewMode = "kanban" | "list" | "calendar";
 type SortCol = "client" | "title" | "format" | "status" | "date";
 
 const GROUP_OPTIONS: { value: GroupBy; label: string }[] = [
@@ -270,6 +275,15 @@ function ContentBoard() {
             >
               <List className="h-3.5 w-3.5" />
             </Button>
+            <Button
+              size="sm"
+              variant={viewMode === "calendar" ? "secondary" : "ghost"}
+              className="h-7 rounded-md px-2"
+              onClick={() => setViewMode("calendar")}
+              title="Calendário"
+            >
+              <CalendarRange className="h-3.5 w-3.5" />
+            </Button>
           </div>
         </div>
       </div>
@@ -279,7 +293,7 @@ function ContentBoard() {
         <div className="grid gap-3 md:grid-cols-3 px-1">
           {[0, 1, 2].map((i) => <Skeleton key={i} className="h-40" />)}
         </div>
-      ) : filtered.length === 0 ? (
+      ) : filtered.length === 0 && viewMode !== "calendar" ? (
         <div className="flex flex-1 items-center justify-center">
           <EmptyState
             icon={LayoutGrid}
@@ -287,6 +301,11 @@ function ContentBoard() {
             description="Crie posts no espaço de cada cliente para acompanhá-los neste quadro."
           />
         </div>
+      ) : viewMode === "calendar" ? (
+
+        /* ── CALENDAR VIEW ── */
+        <CalendarView posts={filtered} clientMap={clientMap} onOpenPost={setOpenPost} />
+
       ) : viewMode === "list" ? (
 
         /* ── LIST VIEW ── */
@@ -406,6 +425,148 @@ function ContentBoard() {
       )}
 
       {openPost && <PostDialog postId={openPost} onClose={() => setOpenPost(null)} />}
+    </div>
+  );
+}
+
+// ── Calendar view ─────────────────────────────────────────────────────────────
+
+const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+function CalendarView({
+  posts,
+  clientMap,
+  onOpenPost,
+}: {
+  posts: Post[];
+  clientMap: Record<string, Client>;
+  onOpenPost: (id: string) => void;
+}) {
+  const [month, setMonth] = useState(() => startOfMonth(new Date()));
+
+  // Group posts by their scheduled day (YYYY-MM-DD)
+  const postsByDay = useMemo(() => {
+    const map: Record<string, Post[]> = {};
+    for (const p of posts) {
+      if (!p.scheduled_date) continue;
+      (map[p.scheduled_date] ??= []).push(p);
+    }
+    return map;
+  }, [posts]);
+
+  const days = useMemo(() => {
+    const gridStart = startOfWeek(startOfMonth(month), { weekStartsOn: 0 });
+    const gridEnd = endOfWeek(endOfMonth(month), { weekStartsOn: 0 });
+    return eachDayOfInterval({ start: gridStart, end: gridEnd });
+  }, [month]);
+
+  const today = new Date();
+  const undated = useMemo(() => posts.filter((p) => !p.scheduled_date), [posts]);
+
+  return (
+    <div className="flex flex-1 flex-col overflow-hidden px-1">
+      {/* Month toolbar */}
+      <div className="mb-2 flex items-center justify-between gap-2 flex-shrink-0">
+        <h2 className="text-sm font-semibold capitalize sm:text-base">
+          {format(month, "MMMM 'de' yyyy", { locale: ptBR })}
+        </h2>
+        <div className="flex items-center gap-1">
+          <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={() => setMonth(startOfMonth(new Date()))}>
+            Hoje
+          </Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setMonth((m) => subMonths(m, 1))} title="Mês anterior">
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setMonth((m) => addMonths(m, 1))} title="Próximo mês">
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Weekday header */}
+      <div className="grid grid-cols-7 gap-1 flex-shrink-0">
+        {WEEKDAYS.map((d) => (
+          <div key={d} className="px-1 pb-1 text-center text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            {d}
+          </div>
+        ))}
+      </div>
+
+      {/* Day grid */}
+      <div className="grid flex-1 auto-rows-fr grid-cols-7 gap-1 overflow-y-auto">
+        {days.map((day) => {
+          const key = format(day, "yyyy-MM-dd");
+          const dayPosts = postsByDay[key] ?? [];
+          const inMonth = isSameMonth(day, month);
+          const isToday = isSameDay(day, today);
+          return (
+            <div
+              key={key}
+              className={cn(
+                "flex min-h-[88px] flex-col rounded-lg border p-1 transition-colors",
+                inMonth ? "bg-card" : "bg-muted/20 text-muted-foreground",
+              )}
+            >
+              <div className="mb-1 flex items-center justify-between px-0.5">
+                <span
+                  className={cn(
+                    "flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-medium",
+                    isToday && "bg-primary text-primary-foreground font-bold",
+                  )}
+                >
+                  {format(day, "d")}
+                </span>
+              </div>
+              <div className="flex flex-1 flex-col gap-0.5 overflow-hidden">
+                {dayPosts.map((p) => {
+                  const brand = clientMap[p.client_id]?.brand_color ?? "#6b7280";
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => onOpenPost(p.id)}
+                      title={p.title}
+                      className="flex items-center gap-1 rounded-md border bg-card px-1.5 py-0.5 text-left text-[10px] font-medium leading-tight hover:bg-accent/50 transition-colors"
+                      style={{ borderLeftColor: brand, borderLeftWidth: 3 }}
+                    >
+                      <span
+                        className="h-1.5 w-1.5 flex-shrink-0 rounded-full"
+                        style={{ backgroundColor: STATUS_COLORS[p.status] }}
+                      />
+                      <span className="truncate">{p.title}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Posts without a scheduled date */}
+      {undated.length > 0 && (
+        <div className="mt-2 flex-shrink-0 rounded-lg border border-dashed bg-muted/20 p-2">
+          <p className="mb-1.5 flex items-center gap-1 text-[11px] font-semibold text-muted-foreground">
+            <CalendarDays className="h-3 w-3" /> Sem data ({undated.length})
+          </p>
+          <div className="flex flex-wrap gap-1">
+            {undated.map((p) => {
+              const brand = clientMap[p.client_id]?.brand_color ?? "#6b7280";
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => onOpenPost(p.id)}
+                  title={p.title}
+                  className="flex max-w-[180px] items-center gap-1 rounded-md border bg-card px-1.5 py-0.5 text-[10px] font-medium hover:bg-accent/50 transition-colors"
+                  style={{ borderLeftColor: brand, borderLeftWidth: 3 }}
+                >
+                  <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full" style={{ backgroundColor: STATUS_COLORS[p.status] }} />
+                  <span className="truncate">{p.title}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
