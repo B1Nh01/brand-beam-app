@@ -1,21 +1,24 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useWorkspace } from "@/hooks/use-workspace";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/empty-state";
 import { ConfirmDialog, type ConfirmState } from "@/components/confirm-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, MoreVertical, Copy, RefreshCw, Pause, Archive, UsersRound, Pencil, Play, DollarSign } from "lucide-react";
+import {
+  Plus, MoreVertical, Copy, RefreshCw, Pause, Archive, UsersRound, Pencil, Play,
+  Search, Instagram, Music2, Eye, ExternalLink,
+} from "lucide-react";
 import { type Client, type Post } from "@/lib/content";
-import { type FinancialRevenue, formatBRL, monthRange } from "@/lib/financial";
+import { type FinancialRevenue, monthRange } from "@/lib/financial";
 import { ClientFormDialog } from "@/components/client-form-dialog";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { RouteError } from "@/components/route-error";
-import { useRole } from "@/hooks/use-role";
 
 const GRADIENT_PALETTE: [string, string][] = [
   ["#7c3aed", "#4f46e5"],
@@ -52,14 +55,29 @@ type ClientsData = {
   media: Record<string, string>;
 };
 
+type StatusFilter = "all" | Client["status"];
+
+const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
+  { value: "all", label: "Todos" },
+  { value: "active", label: "Ativo" },
+  { value: "paused", label: "Pausado" },
+  { value: "archived", label: "Arquivado" },
+];
+
+const STATUS_BADGE: Record<Client["status"], { label: string; cls: string }> = {
+  active: { label: "Ativo", cls: "bg-success/15 text-success-foreground" },
+  paused: { label: "Pausado", cls: "bg-warning/20 text-warning-foreground" },
+  archived: { label: "Arquivado", cls: "bg-muted text-muted-foreground" },
+};
+
 function Clients() {
   const qc = useQueryClient();
   const { data: ws } = useWorkspace();
-  const role = useRole();
-  const isOwner = role === "owner";
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Client | null>(null);
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
   const { data, isLoading } = useQuery<ClientsData>({
     queryKey: ["clients-page"],
@@ -79,9 +97,9 @@ function Clients() {
 
       const clientRows = (clients.data ?? []) as Client[];
 
-      // Batch-create signed URLs for avatars + covers
+      // Batch-create signed URLs for avatars
       const paths = clientRows
-        .flatMap((c) => [c.avatar_url, c.cover_url])
+        .map((c) => c.avatar_url)
         .filter((p): p is string => !!p && !p.startsWith("http"));
       const media: Record<string, string> = {};
       if (paths.length) {
@@ -120,21 +138,63 @@ function Clients() {
     refresh();
   };
 
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return (data?.clients ?? []).filter((c) => {
+      if (statusFilter !== "all" && c.status !== statusFilter) return false;
+      if (q && !`${c.name} ${c.instagram_handle ?? ""} ${c.tiktok_handle ?? ""}`.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [data?.clients, search, statusFilter]);
+
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-6xl space-y-5">
+      {/* Header */}
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
         <div className="min-w-0">
           <h1 className="truncate text-xl font-extrabold tracking-tight sm:text-2xl">Clientes</h1>
-          <p className="truncate text-sm text-muted-foreground">Gerencie os espaços dos seus clientes.</p>
+          <p className="truncate text-sm text-muted-foreground">Gerencie seus clientes.</p>
         </div>
         <Button onClick={() => setOpen(true)} className="shrink-0">
           <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Novo cliente</span>
         </Button>
       </div>
 
+      {/* Toolbar: search + status filters */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-[200px] flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar cliente…"
+            className="pl-9"
+          />
+        </div>
+        <div className="flex items-center gap-1.5">
+          {STATUS_FILTERS.map((f) => (
+            <button
+              key={f.value}
+              onClick={() => setStatusFilter(f.value)}
+              className={cn(
+                "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
+                statusFilter === f.value
+                  ? "bg-primary text-primary-foreground"
+                  : "border bg-background text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <Button onClick={() => setOpen(true)} className="shrink-0">
+          <Plus className="h-4 w-4" /> Novo Cliente
+        </Button>
+      </div>
+
       {isLoading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[0, 1, 2].map((i) => <Skeleton key={i} className="h-44" />)}
+          {[0, 1, 2].map((i) => <Skeleton key={i} className="h-52" />)}
         </div>
       ) : data?.clients.length === 0 ? (
         <EmptyState
@@ -144,105 +204,125 @@ function Clients() {
           actionLabel="Adicionar cliente"
           onAction={() => setOpen(true)}
         />
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          icon={Search}
+          title="Nenhum cliente encontrado"
+          description="Tente ajustar a busca ou os filtros."
+        />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {data?.clients.map((c) => {
-            const pending = data.posts.filter((p) => p.client_id === c.id && (p.status === "in_approval" || p.status === "adjustment_requested")).length;
-            const fee = Number((c as Client & { monthly_fee?: number }).monthly_fee ?? 0);
-            const monthRevenue = data.revenues.find((r) => r.client_id === c.id);
-            const payStatus = monthRevenue?.status;
-            const cover = imgUrl(c.cover_url);
+          {filtered.map((c) => {
+            const clientPosts = data!.posts.filter((p) => p.client_id === c.id);
+            const total = clientPosts.length;
+            const pending = clientPosts.filter((p) => p.status === "in_approval" || p.status === "adjustment_requested").length;
+            const published = clientPosts.filter((p) => p.status === "published").length;
             const avatar = imgUrl(c.avatar_url);
-            const brand = c.brand_color ?? "#2563eb";
-
-            const clientPosts = data.posts.filter((p) => p.client_id === c.id);
-            const draftCount = clientPosts.filter((p) => p.status === "draft").length;
-            const adjustCount = clientPosts.filter((p) => p.status === "adjustment_requested").length;
-            const approvalCount = clientPosts.filter((p) => p.status === "in_approval").length;
-            const approvedCount = clientPosts.filter((p) => p.status === "approved").length;
+            const brand = c.brand_color ?? undefined;
             const gradient = clientGradient(c.id);
+            const badge = STATUS_BADGE[c.status];
 
             return (
               <div
                 key={c.id}
-                className={cn("relative overflow-hidden rounded-xl border bg-card transition-shadow hover:shadow-md", c.status !== "active" && "opacity-60")}
+                className="relative flex flex-col overflow-hidden rounded-xl border bg-card transition-shadow hover:shadow-md"
               >
-                {/* Clickable area — uses Link for reliable navigation */}
-                <Link to="/clients/$id" params={{ id: c.id }} className="block">
-                  {/* Gradient strip */}
-                  <div className="relative h-20" style={{ background: gradient }}>
-                    {cover && (
-                      <img src={cover} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover opacity-60" />
-                    )}
-                    {isOwner && fee > 0 && (
-                      <div className="absolute left-2 top-2 flex items-center gap-1 rounded-full bg-black/40 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur-sm">
-                        <DollarSign className="h-2.5 w-2.5" />
-                        {formatBRL(fee)}
-                        {payStatus === "paid" ? " ✓" : payStatus ? " ●" : ""}
+                {/* Brand color top bar */}
+                <div className="h-1.5 w-full" style={{ background: brand ?? gradient }} />
+
+                <div className="flex flex-1 flex-col p-4">
+                  {/* Header row: avatar + name + status + menu */}
+                  <div className="flex items-start gap-3">
+                    <span
+                      className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl text-base font-bold text-white"
+                      style={{ background: brand ?? gradient }}
+                    >
+                      {avatar ? (
+                        <img src={avatar} alt="" loading="lazy" className="h-full w-full object-cover" />
+                      ) : (
+                        c.name.slice(0, 2).toUpperCase()
+                      )}
+                    </span>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="truncate font-semibold">{c.name}</p>
+                        <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium", badge.cls)}>
+                          {badge.label}
+                        </span>
                       </div>
-                    )}
+                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                        {c.instagram_handle && (
+                          <span className="flex items-center gap-1">
+                            <Instagram className="h-3 w-3" /> {c.instagram_handle}
+                          </span>
+                        )}
+                        {c.tiktok_handle && (
+                          <span className="flex items-center gap-1">
+                            <Music2 className="h-3 w-3" /> {c.tiktok_handle}
+                          </span>
+                        )}
+                        {!c.instagram_handle && !c.tiktok_handle && <span>—</span>}
+                      </div>
+                    </div>
+
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="-mr-1 -mt-1 h-7 w-7 shrink-0 text-muted-foreground">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => setEditing(c)}><Pencil className="h-4 w-4" /> Editar</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => copyLink(c)}><Copy className="h-4 w-4" /> Copiar link do portal</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setConfirm({
+                          title: "Regenerar token do portal?",
+                          description: `O link atual do portal de ${c.name} deixará de funcionar imediatamente. Você precisará enviar o novo link ao cliente.`,
+                          confirmLabel: "Regenerar",
+                          onConfirm: async () => { await regen(c); },
+                        })}><RefreshCw className="h-4 w-4" /> Regenerar token</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setStatus(c, c.status === "paused" ? "active" : "paused")}>
+                          {c.status === "paused" ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />} {c.status === "paused" ? "Reativar" : "Pausar"}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setConfirm({
+                          title: "Arquivar cliente?",
+                          description: `${c.name} será arquivado e deixará de aparecer entre os clientes ativos. Você pode reativá-lo depois.`,
+                          confirmLabel: "Arquivar",
+                          onConfirm: async () => { await setStatus(c, "archived"); },
+                        })}><Archive className="h-4 w-4" /> Arquivar</DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
 
-                  <div className="p-4 pt-0">
-                    <div className="-mt-7 mb-2 flex items-end justify-between gap-2">
-                      <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border-4 border-card text-base font-bold text-white" style={{ background: gradient }}>
-                        {avatar ? <img src={avatar} alt="" loading="lazy" className="h-full w-full object-cover" /> : c.name.charAt(0)}
-                      </span>
-                      {pending > 0 && (
-                        <span className="mb-1 rounded-full bg-warning/20 px-2 py-0.5 text-xs text-warning-foreground">{pending} pendente{pending !== 1 ? "s" : ""}</span>
-                      )}
+                  {/* Stats */}
+                  <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+                    <div>
+                      <p className="text-xl font-bold leading-none">{total}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">Total</p>
                     </div>
-                    <p className="truncate font-semibold">{c.name}</p>
-                    <p className="truncate text-xs text-muted-foreground">{c.instagram_handle ?? "—"}</p>
-
-                    <div className="mt-2.5 flex flex-wrap gap-1.5">
-                      {draftCount > 0 && (
-                        <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">{draftCount} rascunho{draftCount !== 1 ? "s" : ""}</span>
-                      )}
-                      {adjustCount > 0 && (
-                        <span className="rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] text-destructive">{adjustCount} ajuste{adjustCount !== 1 ? "s" : ""}</span>
-                      )}
-                      {approvalCount > 0 && (
-                        <span className="rounded-full bg-warning/20 px-2 py-0.5 text-[10px] text-warning-foreground">{approvalCount} aprovação</span>
-                      )}
-                      {approvedCount > 0 && (
-                        <span className="rounded-full bg-success/20 px-2 py-0.5 text-[10px] text-success-foreground">{approvedCount} aprovado{approvedCount !== 1 ? "s" : ""}</span>
-                      )}
-                      {clientPosts.length === 0 && (
-                        <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">Sem posts</span>
-                      )}
+                    <div>
+                      <p className={cn("text-xl font-bold leading-none", pending > 0 && "text-warning-foreground")}>{pending}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">Pendentes</p>
+                    </div>
+                    <div>
+                      <p className="text-xl font-bold leading-none">{published}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">Publicados</p>
                     </div>
                   </div>
-                </Link>
 
-                {/* Dropdown — absolutely positioned above the Link so clicks don't navigate */}
-                <div className="absolute right-2 top-2 z-10">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="secondary" size="icon" className="h-7 w-7 bg-black/30 text-white backdrop-blur hover:bg-black/50">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => setEditing(c)}><Pencil className="h-4 w-4" /> Editar</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => copyLink(c)}><Copy className="h-4 w-4" /> Copiar link do portal</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setConfirm({
-                        title: "Regenerar token do portal?",
-                        description: `O link atual do portal de ${c.name} deixará de funcionar imediatamente. Você precisará enviar o novo link ao cliente.`,
-                        confirmLabel: "Regenerar",
-                        onConfirm: async () => { await regen(c); },
-                      })}><RefreshCw className="h-4 w-4" /> Regenerar token</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setStatus(c, c.status === "paused" ? "active" : "paused")}>
-                        {c.status === "paused" ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />} {c.status === "paused" ? "Reativar" : "Pausar"}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setConfirm({
-                        title: "Arquivar cliente?",
-                        description: `${c.name} será arquivado e deixará de aparecer entre os clientes ativos. Você pode reativá-lo depois.`,
-                        confirmLabel: "Arquivar",
-                        onConfirm: async () => { await setStatus(c, "archived"); },
-                      })}><Archive className="h-4 w-4" /> Arquivar</DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  {/* Actions */}
+                  <div className="mt-4 flex items-center gap-2">
+                    <Button asChild variant="secondary" className="flex-1 bg-primary/10 text-primary hover:bg-primary/20">
+                      <Link to="/clients/$id" params={{ id: c.id }}>
+                        <Eye className="h-4 w-4" /> Ver conteúdos
+                      </Link>
+                    </Button>
+                    <Button asChild variant="outline" className="shrink-0">
+                      <a href={`/portal/${c.portal_token}`} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="h-4 w-4" /> Portal
+                      </a>
+                    </Button>
+                  </div>
                 </div>
               </div>
             );
